@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/banner.png" alt="Echo Music Logo"/>
 
-  <p><b>A modern Android music app with ad-free streaming, synced lyrics, offline playback, and an intuitive user experience.</b></p>
+  <p><b>A modern Android and Windows Desktop music app with ad-free streaming, synced lyrics, offline playback, and an intuitive user experience.</b></p>
 </div>
 
 ---
@@ -64,6 +64,11 @@ Echo Music delivers a seamless, premium listening experience by leveraging YouTu
       </td>
     </tr>
   </table>
+  <br>
+  <div align="center">
+    <b>Windows Desktop Interface (Nothing OS 5.0 Dark Void-Slate Theme & Synced Lyrics)</b><br><br>
+    <img src="Screenshots/Desktop.png" alt="Windows Desktop Interface" width="680" style="border-radius: 12px; box-shadow: 0 8px 16px rgba(0,0,0,0.3);"/>
+  </div>
 </div>
 
 ---
@@ -150,9 +155,10 @@ Echo Music delivers a seamless, premium listening experience by leveraging YouTu
 
 ## Installation & Setup
 
-### Android Installation
+### Android & Windows Installation
 
-Download the latest pre-compiled APK from the [Releases Page](https://github.com/EchoMusicApp/Echo-Music/releases/latest).
+- **Windows Desktop Application (.exe / .msi):** Download `EchoMusic.exe` or `EchoMusic.msi` from the [Releases Page](https://github.com/EchoMusicApp/Echo-Music/releases/latest).
+- **Android App (.apk):** Download `EchoMusic-Universal-GMS.apk` from the [Releases Page](https://github.com/EchoMusicApp/Echo-Music/releases/latest).
 
 <details>
 <summary><b>Building from Source</b></summary>
