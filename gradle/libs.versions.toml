@@ -4,6 +4,7 @@ haze = "1.0.2"
 androidGradlePlugin = "9.0.0"
 json = "20251224"
 kotlin = "2.3.10"
+jetbrainsCompose = "1.7.3"
 compose = "1.10.2"
 lifecycle = "2.10.0"
 material3 = "1.5.0-alpha18"
@@ -49,6 +50,7 @@ youtubedlAndroid = "0.18.1"
 playServicesLocation = "21.4.0"
 coroutinesTest = "1.10.2"
 robolectric = "4.14.1"
+vlcj = "4.8.3"
 
 [libraries]
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
@@ -150,6 +152,7 @@ youtubedl-android-library = { group = "io.github.junkfood02.youtubedl-android", 
 youtubedl-android-ffmpeg = { group = "io.github.junkfood02.youtubedl-android", name = "ffmpeg", version.ref = "youtubedlAndroid" }
 youtubedl-android-aria2c = { group = "io.github.junkfood02.youtubedl-android", name = "aria2c", version.ref = "youtubedlAndroid" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
+vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
 
 [plugins]
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
@@ -157,4 +160,5 @@ hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 kotlin-ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 protobufPlugin = { id = "com.google.protobuf", version.ref = "protobufPlugin" }
-
+jetbrains-compose = { id = "org.jetbrains.compose", version.ref = "jetbrainsCompose" }
+kotlin-multiplatform = { id = "org.jetbrains.kotlin.multiplatform", version.ref = "kotlin" }
