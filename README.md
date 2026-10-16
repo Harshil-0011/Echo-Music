@@ -1,7 +1,7 @@
 <div align="center">
   <img src="assets/banner.png" alt="Echo Music Logo"/>
 
-  <p><b>A modern Android music app with ad-free streaming, synced lyrics, offline playback, and an intuitive user experience.</b></p>
+  <p><b>A modern Android and Windows Desktop music app with ad-free streaming, synced lyrics, offline playback, and an intuitive user experience.</b></p>
 </div>
 
 ---
@@ -150,7 +150,7 @@ Echo Music delivers a seamless, premium listening experience by leveraging YouTu
 
 ## Installation & Setup
 
-### Android Installation
+### Android & Windows Installation
 
 Download the latest pre-compiled APK from the [Releases Page](https://github.com/EchoMusicApp/Echo-Music/releases/latest).
 
