@@ -26,7 +26,7 @@ if (hasGoogleServicesConfig) {
 
 android {
   namespace = "echo.music.iad1tya"
-  compileSdk = 37
+  compileSdk = 36
   ndkVersion = "28.2.13676358"
 
   defaultConfig {

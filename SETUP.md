@@ -158,3 +158,31 @@ Please read [CONTRIBUTING.md](CONTRIBUTING.md) for details on our code of conduc
 ## License
 
 This project is licensed under the GNU General Public License v3.0 - see the [LICENSE](LICENSE) file for details.
+
+## Windows Desktop Setup & Building
+
+Echo Music supports Windows natively using **Compose Multiplatform (JetBrains Compose for Desktop)** in the `:desktop` module.
+
+### 1. Prerequisites
+- JDK 21 (or modern Java 21+ toolchain)
+- Windows 10/11 (or Linux/macOS for cross-compilation testing)
+
+### 2. Compile Desktop Target
+
+```bash
+./gradlew :desktop:compileKotlinDesktop
+```
+
+### 3. Package Windows Installers (.exe / .msi)
+
+To generate standalone Windows installers (`.exe` / `.msi`) and runnable distribution JARs:
+
+```bash
+# Package standard desktop distribution for current OS
+./gradlew :desktop:packageDistributionForCurrentOs
+
+# Package standalone executable Uber JAR
+./gradlew :desktop:packageUberJarForCurrentOs
+```
+
+The output installers and executables are located under `desktop/build/compose/binaries/` and `desktop/build/compose/jars/`.

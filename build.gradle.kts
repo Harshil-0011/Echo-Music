@@ -5,6 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.ksp) apply (false)
     alias(libs.plugins.kotlin.serialization) apply false
     alias(libs.plugins.protobufPlugin) apply false
+    alias(libs.plugins.jetbrains.compose) apply false
+    alias(libs.plugins.kotlin.multiplatform) apply false
 }
 
 buildscript {
@@ -21,10 +23,6 @@ buildscript {
         classpath("com.google.firebase:firebase-crashlytics-gradle:3.0.2")
     }
 }
-
-// tasks.register<Delete>("clean") {
-//    delete(rootProject.layout.buildDirectory)
-// }
 
 subprojects {
     apply(plugin = "com.diffplug.spotless")
