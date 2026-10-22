@@ -51,6 +51,7 @@ playServicesLocation = "21.4.0"
 coroutinesTest = "1.10.2"
 robolectric = "4.14.1"
 vlcj = "4.8.3"
+koin = "3.6.2"
 
 [libraries]
 retrofit = { module = "com.squareup.retrofit2:retrofit", version.ref = "retrofit" }
@@ -153,6 +154,8 @@ youtubedl-android-ffmpeg = { group = "io.github.junkfood02.youtubedl-android", n
 youtubedl-android-aria2c = { group = "io.github.junkfood02.youtubedl-android", name = "aria2c", version.ref = "youtubedlAndroid" }
 play-services-location = { module = "com.google.android.gms:play-services-location", version.ref = "playServicesLocation" }
 vlcj = { module = "uk.co.caprica:vlcj", version.ref = "vlcj" }
+koin-core = { module = "io.insert-koin:koin-core", version.ref = "koin" }
+koin-ktor = { module = "io.insert-koin:koin-ktor-client", version.ref = "koin" }
 
 [plugins]
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }

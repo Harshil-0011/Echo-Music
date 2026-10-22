@@ -1,0 +1,16 @@
+package echo.music.iad1tya.ui.screens
+
+enum class Screens(val route: String) {
+    Home("home"),
+    Search("search"),
+    Library("library"),
+    ListenTogether("listen_together"),
+    Charts("charts"),
+    Mood("mood"),
+    NewRelease("new_release"),
+    Generate("generate"),
+    Recognition("recognition"),
+    Equalizer("equalizer"),
+    Queue("queue"),
+    Settings("settings"),
+}

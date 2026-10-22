@@ -1,0 +1,415 @@
+package echo.music.iad1tya.ui.screens.equalizer
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.playback.DesktopPlaybackEngine
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun EqualizerScreen(
+    playerEngine: DesktopPlaybackEngine,
+    preferences: LocalPreferences,
+    onBackClick: () -> Unit = {}
+) {
+    var selectedPreset by remember { mutableStateOf(preferences.getString("equalizer_preset", "flat")) }
+    var bands by remember { mutableStateOf(List(10) { 0f }) }
+    var isEnabled by remember { mutableStateOf(preferences.getBoolean("equalizer_enabled", false)) }
+
+    val presets = listOf(
+        "flat" to "Flat",
+        "bass" to "Bass Boost",
+        "treble" to "Treble Boost",
+        "rock" to "Rock",
+        "pop" to "Pop",
+        "classical" to "Classical",
+        "jazz" to "Jazz",
+        "electronic" to "Electronic",
+        "hiphop" to "Hip Hop",
+        "acoustic" to "Acoustic",
+        "vocal" to "Vocal Booster"
+    )
+
+    val presetValues = mapOf(
+        "flat" to List(10) { 0f },
+        "bass" to listOf(6f, 4f, 2f, 1f, 0f, 0f, 0f, 0f, 0f, 0f),
+        "treble" to listOf(0f, 0f, 0f, 0f, 0f, 0f, 1f, 2f, 4f, 6f),
+        "rock" to listOf(4f, 2f, -2f, -3f, -2f, 0f, 2f, 4f, 4f, 4f),
+        "pop" to listOf(-1f, 2f, 4f, 2f, 0f, -1f, 1f, 2f, 2f, 1f),
+        "classical" to listOf(3f, 2f, 1f, 0f, -1f, -1f, 0f, 1f, 2f, 3f),
+        "jazz" to listOf(3f, 2f, 1f, 0f, -1f, -1f, 1f, 2f, 3f, 3f),
+        "electronic" to listOf(5f, 3f, 0f, -2f, 0f, 2f, 4f, 4f, 4f, 5f),
+        "hiphop" to listOf(6f, 4f, 2f, 0f, -1f, 0f, 1f, 2f, 4f, 5f),
+        "acoustic" to listOf(2f, 1f, 1f, 0f, 0f, 0f, 0f, 1f, 1f, 1f),
+        "vocal" to listOf(0f, 1f, 2f, 4f, 5f, 4f, 3f, 2f, 1f, 0f)
+    )
+
+    var bands by remember { mutableStateOf(presetValues[selectedPreset] ?: List(10) { 0f }) }
+    var customBands by remember { mutableStateOf(List(10) { 0f }) }
+
+    LaunchedEffect(selectedPreset) {
+        bands = presetValues[selectedPreset] ?: List(10) { 0f }
+    }
+
+    LaunchedEffect(bands) {
+        if (bands != presetValues[selectedPreset] && selectedPreset != "custom") {
+            customBands = bands
+        }
+    }
+
+    LaunchedEffect(isEnabled) {
+        preferences.putBoolean("equalizer_enabled", isEnabled)
+    }
+
+    LaunchedEffect(selectedPreset) {
+        preferences.putString("equalizer_preset", selectedPreset)
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // Top Bar
+            Surface(
+                color = VoidSlateSurface,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = onBackClick) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                    }
+                    Text(
+                        "Equalizer",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            color = ElectricCyan
+                        )
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        Switch(checked = isEnabled, onCheckedChange = { isEnabled = it }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                        Text("Enabled", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                    }
+                }
+            }
+
+            // Main Content
+            Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                // Preset Selector
+                Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                    Text("Presets", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        items(presets) { (key, label) ->
+                            val isSelected = selectedPreset == key
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { 
+                                    selectedPreset = key
+                                    bands = presetValues[key] ?: List(10) { 0f }
+                                },
+                                label = { Text(label) },
+                                colors = FilterChipDefaults.colors(
+                                    selectedContainerColor = ElectricCyan,
+                                    unselectedContainerColor = VoidSlateCard,
+                                    selectedLabelColor = Color.Black,
+                                    unselectedLabelColor = TextPrimary
+                                ),
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Custom EQ Bands
+                if (selectedPreset == "flat" || true) {
+                    Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text("Frequency Bands", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                            OutlinedButton(onClick = { 
+                                selectedPreset = "flat"
+                                bands = List(10) { 0f }
+                            }) {
+                                Text("Reset", color = ElectricCyan)
+                            }
+                        }
+
+                        // EQ Bands
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.spacedBy(4.dp),
+                            verticalAlignment = Alignment.Bottom
+                        ) {
+                            val frequencies = listOf("32Hz", "64Hz", "125Hz", "250Hz", "500Hz", "1kHz", "2kHz", "4kHz", "8kHz", "16kHz")
+                            frequencies.forEachIndexed { index, freq ->
+                                EqBandSlider(
+                                    label = freq,
+                                    value = bands[index],
+                                    onValueChange = { value ->
+                                        val newBands = bands.toMutableList()
+                                        newBands[index] = value
+                                        bands = newBands
+                                        if (selectedPreset != "custom") {
+                                            selectedPreset = "custom"
+                                            customBands = newBands
+                                        } else {
+                                            customBands = newBands
+                                        }
+                                    },
+                                    modifier = Modifier.weight(1f)
+                                )
+                            }
+                        }
+                    }
+                }
+
+                // Custom Preset Save
+                if (selectedPreset == "custom") {
+                    OutlinedButton(onClick = { 
+                        /* save custom preset */
+                        preferences.putString("custom_eq_bands", customBands.joinToString(","))
+                    }) {
+                        Text("Save Custom Preset", color = ElectricCyan)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun EqBandSlider(
+    label: String,
+    value: Float,
+    onValueChange: (Float) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Column(
+        modifier = modifier
+            .weight(1f)
+            .padding(horizontal = 2.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(8.dp)
+    ) {
+        Text(label, style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary))
+        
+        // Vertical slider
+        Box(
+            modifier = Modifier
+                .width(40.dp)
+                .height(200.dp)
+        ) {
+            Slider(
+                value = value,
+                onValueChange = onValueChange,
+                valueRange = -12f..12f,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .rotate(-90f)
+                    .graphicsLayer {
+                        transformOrigin = androidx.compose.ui.graphics.TransformOrigin.Center
+                    },
+                colors = SliderDefaults.colors(
+                    thumbColor = ElectricCyan,
+                    activeTrackColor = ElectricCyan,
+                    inactiveTrackColor = VoidSlateCardHover
+                )
+            )
+        }
+        
+        Text(
+            "${value.toInt()} dB",
+            style = MaterialTheme.typography.labelSmall.copy(color = if (value != 0f) ElectricCyan else TextSecondary)
+        )
+    }
+}
+
+@Composable
+fun EqualizerDialog(
+    onDismissRequest: () -> Unit,
+    playerEngine: DesktopPlaybackEngine,
+    preferences: LocalPreferences
+) {
+    var selectedPreset by remember { mutableStateOf(preferences.getString("equalizer_preset", "flat")) }
+    var bands by remember { mutableStateOf(List(10) { 0f }) }
+    var isEnabled by remember { mutableStateOf(preferences.getBoolean("equalizer_enabled", false)) }
+
+    val presets = listOf(
+        "flat" to "Flat",
+        "bass" to "Bass Boost",
+        "treble" to "Treble Boost",
+        "rock" to "Rock",
+        "pop" to "Pop",
+        "classical" to "Classical",
+        "jazz" to "Jazz",
+        "electronic" to "Electronic",
+        "hiphop" to "Hip Hop",
+        "acoustic" to "Acoustic",
+        "vocal" to "Vocal Booster"
+    )
+
+    val presetValues = mapOf(
+        "flat" to List(10) { 0f },
+        "bass" to listOf(6f, 4f, 2f, 1f, 0f, 0f, 0f, 0f, 0f, 0f),
+        "treble" to listOf(0f, 0f, 0f, 0f, 0f, 0f, 1f, 2f, 4f, 6f),
+        "rock" to listOf(4f, 2f, -2f, -3f, -2f, 0f, 2f, 4f, 4f, 4f),
+        "pop" to listOf(-1f, 2f, 4f, 2f, 0f, -1f, 1f, 2f, 2f, 1f),
+        "classical" to listOf(3f, 2f, 1f, 0f, -1f, -1f, 0f, 1f, 2f, 3f),
+        "jazz" to listOf(3f, 2f, 1f, 0f, -1f, -1f, 1f, 2f, 3f, 3f),
+        "electronic" to listOf(5f, 3f, 0f, -2f, 0f, 2f, 4f, 4f, 4f, 5f),
+        "hiphop" to listOf(6f, 4f, 2f, 0f, -1f, 0f, 1f, 2f, 4f, 5f),
+        "acoustic" to listOf(2f, 1f, 1f, 0f, 0f, 0f, 0f, 1f, 1f, 1f),
+        "vocal" to listOf(0f, 1f, 2f, 4f, 5f, 4f, 3f, 2f, 1f, 0f)
+    )
+
+    LaunchedEffect(selectedPreset) {
+        bands = presetValues[selectedPreset] ?: List(10) { 0f }
+    }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text("Equalizer", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
+        text = {
+            Column(modifier = Modifier.width(500.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                // Enable toggle
+                SettingsRow("Enabled", "Turn on equalizer") {
+                    Switch(checked = isEnabled, onCheckedChange = { 
+                        isEnabled = it
+                        preferences.putBoolean("equalizer_enabled", it)
+                    }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+
+                // Preset selector
+                SettingsGroup("Presets") {
+                    LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                        items(presets) { (key, label) ->
+                            val isSelected = selectedPreset == key
+                            FilterChip(
+                                selected = isSelected,
+                                onClick = { 
+                                    selectedPreset = key
+                                    bands = presetValues[key] ?: List(10) { 0f }
+                                },
+                                label = { Text(label) },
+                                colors = FilterChipDefaults.colors(
+                                    selectedContainerColor = ElectricCyan,
+                                    unselectedContainerColor = VoidSlateCard,
+                                    selectedLabelColor = Color.Black,
+                                    unselectedLabelColor = TextPrimary
+                                ),
+                                modifier = Modifier.padding(end = 8.dp)
+                            )
+                        }
+                    }
+                }
+
+                // Bands
+                SettingsGroup("Frequency Bands") {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                        verticalAlignment = Alignment.Bottom
+                    ) {
+                        val frequencies = listOf("32Hz", "64Hz", "125Hz", "250Hz", "500Hz", "1kHz", "2kHz", "4kHz", "8kHz", "16kHz")
+                        frequencies.forEachIndexed { index, freq ->
+                            EqBandSlider(
+                                label = freq,
+                                value = bands[index],
+                                onValueChange = { value ->
+                                    val newBands = bands.toMutableList()
+                                    newBands[index] = value
+                                    bands = newBands
+                                },
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                    }
+                }
+
+                // Reset button
+                SettingsRow("", "") {
+                    OutlinedButton(onClick = { 
+                        selectedPreset = "flat"
+                        bands = List(10) { 0f }
+                    }) {
+                        Text("Reset to Flat", color = ElectricCyan)
+                    }
+                }
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Close", color = ElectricCyan)
+            }
+        }
+    )
+}
+
+@Composable
+fun SettingsRow(title: String, subtitle: String, trailing: @Composable () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
+        }
+        trailing()
+    }
+}
+
+@Composable
+fun SettingsGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricCyan))
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(16.dp)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+        }
+    }
+}
+
+

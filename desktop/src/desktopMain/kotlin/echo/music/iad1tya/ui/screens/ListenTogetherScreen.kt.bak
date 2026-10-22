@@ -1,0 +1,321 @@
+package echo.music.iad1tya.ui.screens
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ListenTogetherScreen(
+    onBackClick: () -> Unit = {}
+) {
+    var isHost by remember { mutableStateOf(false) }
+    var roomCode by remember { mutableStateOf("") }
+    var roomName by remember { mutableStateOf("") }
+    var isConnected by remember { mutableStateOf(false) }
+    var participants by remember { mutableStateOf(listOf<String>()) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    val scope = rememberCoroutineScope()
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // Top Bar
+            Surface(
+                color = VoidSlateSurface,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = { onBackClick() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                    }
+                    Text(
+                        "Listen Together",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            color = ElectricCyan
+                        )
+                    )
+                }
+            }
+
+            // Main Content
+            Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                if (!isConnected && !isHost) {
+                    // Initial screen - Host or Join
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Icon(Icons.Filled.Group, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(80.dp))
+                        Spacer(Modifier.height(24.dp))
+                        Text(
+                            "Listen Together",
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                        )
+                        Spacer(Modifier.height(8.dp))
+                        Text(
+                            "Host or join synced listening sessions in real-time",
+                            style = MaterialTheme.typography.bodyLarge.copy(color = TextSecondary)
+                        )
+                        Spacer(Modifier.height(32.dp))
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                            FilledButton(onClick = { isHost = true }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black)) {
+                                Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(24.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Host Session")
+                            }
+                            OutlinedButton(onClick = { isHost = false; isConnected = true }, colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)) {
+                                Text("Join Session")
+                            }
+                        }
+                    }
+                } else if (isHost && !isConnected) {
+                    // Host setup
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Create Session", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                        Spacer(Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = roomName,
+                            onValueChange = { roomName = it },
+                            placeholder = { Text("Session Name (optional)", color = TextSecondary) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(24.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = VoidSlateCard,
+                                unfocusedContainerColor = VoidSlateCard,
+                                focusedBorderColor = ElectricCyan,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            modifier = Modifier.width(400.dp).height(48.dp)
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = roomCode,
+                            onValueChange = { roomCode = it },
+                            placeholder = { Text("Room Code (auto-generated)", color = TextSecondary) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(24.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = VoidSlateCard,
+                                unfocusedContainerColor = VoidSlateCard,
+                                focusedBorderColor = ElectricCyan,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            modifier = Modifier.width(400.dp).height(48.dp)
+                        )
+
+                        Spacer(Modifier.height(24.dp))
+
+                        FilledButton(onClick = { isConnected = true; roomCode = "ABC123" }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black), modifier = Modifier.width(200.dp).height(56.dp)) {
+                            Text("Create Session", style = TextStyle(fontWeight = FontWeight.Bold))
+                        }
+                    }
+                } else if (!isHost && isConnected) {
+                    // Join session
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.Center,
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text("Join Session", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                        Spacer(Modifier.height(16.dp))
+
+                        OutlinedTextField(
+                            value = roomCode,
+                            onValueChange = { roomCode = it },
+                            placeholder = { Text("Enter Room Code", color = TextSecondary) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(24.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = VoidSlateCard,
+                                unfocusedContainerColor = VoidSlateCard,
+                                focusedBorderColor = ElectricCyan,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            modifier = Modifier.width(400.dp).height(48.dp)
+                        )
+
+                        Spacer(Modifier.height(16.dp))
+
+                        Text("Your Name (optional)", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                        OutlinedTextField(
+                            value = roomName,
+                            onValueChange = { roomName = it },
+                            placeholder = { Text("Your Name", color = TextSecondary) },
+                            singleLine = true,
+                            shape = RoundedCornerShape(24.dp),
+                            colors = OutlinedTextFieldDefaults.colors(
+                                focusedContainerColor = VoidSlateCard,
+                                unfocusedContainerColor = VoidSlateCard,
+                                focusedBorderColor = ElectricCyan,
+                                unfocusedBorderColor = Color.Transparent,
+                                focusedTextColor = TextPrimary,
+                                unfocusedTextColor = TextPrimary
+                            ),
+                            modifier = Modifier.width(400.dp).height(48.dp)
+                        )
+
+                        Spacer(Modifier.height(24.dp))
+
+                        FilledButton(onClick = { /* join */ }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black), modifier = Modifier.width(200.dp).height(56.dp)) {
+                            Text("Join Session", style = TextStyle(fontWeight = FontWeight.Bold))
+                        }
+                    }
+                } else if (isConnected) {
+                    // In session
+                    Column(
+                        modifier = Modifier.fillMaxSize(),
+                        verticalArrangement = Arrangement.spacedBy(24.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        if (isHost) {
+                            Surface(
+                                color = VoidSlateCard,
+                                shape = RoundedCornerShape(16.dp),
+                                modifier = Modifier.fillMaxWidth().padding(24.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                    Text("Session Active", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = ElectricCyan))
+                                    Text("Room Code: $roomCode", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                                    Text("Share this code with friends to join", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+
+                                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                                        IconButton(onClick = { SystemUtils.copyToClipboard(roomCode, "Room Code") }) {
+                                            Icon(Icons.Filled.ContentCopy, contentDescription = "Copy room code", tint = ElectricCyan)
+                                        }
+                                        TextButton(onClick = { /* share */ }) {
+                                            Text("Share", color = ElectricCyan)
+                                        }
+                                    }
+
+                                    if (participants.isNotEmpty()) {
+                                        Text("${participants.size} participants", style = MaterialTheme.typography.bodyMedium.copy(color = ElectricCyan))
+                                        LazyColumn {
+                                            items(participants) { name ->
+                                                Row(
+                                                    modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                                    verticalAlignment = Alignment.CenterVertically
+                                ) {
+                                    Icon(Icons.Filled.Person, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(24.dp))
+                                    Text(name, style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    } else {
+                        Surface(
+                            color = VoidSlateCard,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(24.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                                Text("Connected to Session", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = ElectricCyan))
+                                Text("Room: $roomCode", style = MaterialTheme.typography.titleMedium.copy(color = TextPrimary))
+                                Text("Waiting for host to start...", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                Button(onClick = { isConnected = false }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))) {
+                                    Text("Leave", color = Color.White)
+                                }
+                            }
+                        }
+                    }
+
+                    // Chat
+                    if (isConnected && participants.isNotEmpty()) {
+                        Spacer(Modifier.height(24.dp))
+                        Surface(
+                            color = VoidSlateCard,
+                            shape = RoundedCornerShape(16.dp),
+                            modifier = Modifier.fillMaxWidth().padding(24.dp)
+                        ) {
+                            Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                                Text("Chat", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricCyan))
+                                LazyColumn(
+                                    modifier = Modifier.height(200.dp),
+                                    verticalArrangement = Arrangement.spacedBy(8.dp)
+                                ) {
+                                    items(listOf("Welcome to the session!", "Anyone want to pick the next song?")) { msg ->
+                                        Row(
+                                            modifier = Modifier.fillMaxWidth().padding(vertical = 4.dp),
+                                            verticalAlignment = Alignment.CenterVertically
+                                        ) {
+                                            Icon(Icons.Filled.Chat, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(24.dp))
+                                            Text(msg, style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                        }
+                                    }
+                                }
+                                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    OutlinedTextField(
+                                        value = "",
+                                        onValueChange = { },
+                                        placeholder = { Text("Message...", color = TextSecondary) },
+                                        singleLine = true,
+                                        shape = RoundedCornerShape(24.dp),
+                                        modifier = Modifier.weight(1f).height(48.dp)
+                                    )
+                                    IconButton(onClick = { /* send */ }) {
+                                        Icon(Icons.Filled.Send, contentDescription = "Send", tint = ElectricCyan)
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+

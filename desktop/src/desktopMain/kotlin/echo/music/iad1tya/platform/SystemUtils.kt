@@ -7,6 +7,9 @@ import java.awt.TrayIcon
 import java.awt.datatransfer.DataFlavor
 import java.awt.datatransfer.StringSelection
 import java.awt.image.BufferedImage
+import java.io.File
+import javax.swing.JFileChooser
+import javax.swing.filechooser.FileNameExtensionFilter
 import java.net.URI
 
 actual object SystemUtils {
@@ -72,5 +75,24 @@ actual object SystemUtils {
     actual fun showToast(message: String) {
         println("[Toast] $message")
         showNotification("Echo Music", message)
+    }
+
+    actual fun pickFile(): File? {
+        var result: File? = null
+        val latch = java.util.concurrent.CountDownLatch(1)
+        java.awt.EventQueue.invokeLater {
+            val chooser = JFileChooser().apply {
+                dialogTitle = "Open Audio File"
+                fileFilter = FileNameExtensionFilter("Audio Files", "mp3", "wav", "flac", "ogg", "m4a", "aac")
+                isAcceptAllFileFilterUsed = true
+            }
+            val res = chooser.showOpenDialog(null)
+            if (res == JFileChooser.APPROVE_OPTION) {
+                result = chooser.selectedFile
+            }
+            latch.countDown()
+        }
+        latch.await()
+        return result
     }
 }

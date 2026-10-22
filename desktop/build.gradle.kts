@@ -30,27 +30,26 @@ kotlin {
     }
 
     sourceSets {
-        val commonMain by getting {
+        val desktopMain by getting {
             dependencies {
+                implementation(compose.desktop.currentOs)
+                implementation("org.jetbrains.compose.desktop:desktop:1.7.3")
                 implementation(compose.runtime)
                 implementation(compose.foundation)
                 implementation(compose.material3)
                 implementation(compose.ui)
                 implementation(compose.components.resources)
+                implementation(compose.materialIconsExtended)
 
                 implementation(libs.materialKolor)
-                implementation(libs.ktor.client.core)
-                implementation(libs.ktor.client.cio)
-                implementation(libs.ktor.client.content.negotiation)
-                implementation(libs.ktor.serialization.json)
-            }
-        }
-
-        val desktopMain by getting {
-            dependencies {
-                implementation(compose.desktop.currentOs)
-                implementation(libs.vlcj)
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-core:1.10.2")
+                implementation("org.jetbrains.kotlinx:kotlinx-coroutines-swing:1.10.2")
                 implementation(libs.apache.lang3)
+                implementation(libs.json)
+                // Explicit Skiko native runtime for Windows/Linux
+                implementation("org.jetbrains.skiko:skiko-awt-runtime-windows-x64:0.9.37.3")
+                implementation("org.jetbrains.skiko:skiko-awt-runtime-linux-x64:0.9.37.3")
+                implementation("org.jetbrains.skiko:skiko:0.9.37.3")
             }
         }
     }
@@ -60,11 +59,11 @@ compose.desktop {
     application {
         mainClass = "echo.music.iad1tya.desktop.MainKt"
         nativeDistributions {
-            targetFormats(TargetFormat.Exe, TargetFormat.Msi)
+            targetFormats(TargetFormat.Exe, TargetFormat.Msi, TargetFormat.Deb, TargetFormat.Rpm)
             packageName = "EchoMusic"
             packageVersion = "1.4.3"
             description = "Echo Music Desktop Application"
-            copyright = "© 2025 Echo Music"
+            copyright = "Copyright 2025 Echo Music"
             vendor = "Echo Music"
             windows {
                 menuGroup = "Echo Music"
@@ -75,6 +74,15 @@ compose.desktop {
                 shortcut = true
                 menu = true
             }
+            linux {
+                packageName = "echo-music"
+                debMaintainer = "Echo Music <hello@echomusic.fun>"
+                menuGroup = "Audio"
+                appCategory = "Audio"
+            }
+        }
+        buildTypes.release.proguard {
+            configurationFiles.from(project.file("proguard-rules.pro"))
         }
     }
 }

@@ -1,0 +1,117 @@
+package echo.music.iad1tya.ui.component
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.SongModel
+import echo.music.iad1tya.ui.*
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.Painter
+import androidx.compose.ui.res.painterResource
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun TrackCard(track: SongModel, compact: Boolean = false, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .then(if (compact) Modifier.width(180.dp) else Modifier.fillMaxWidth())
+            .clickable { onClick() }
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onClick() }) }
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.linearGradient(listOf(ElectricCyan.copy(alpha = 0.6f), MaterialTheme.colorScheme.surfaceContainerHigh))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(track.title.take(1).uppercase(), color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(track.title, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+@Composable
+fun AlbumTrackRow(
+    track: SongModel,
+    index: Int,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable { onClick() }
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onClick() }) }
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
+    ) {
+        Text(
+            "$index",
+            style = MaterialTheme.typography.bodyMedium.copy(color = if (isPlaying) ElectricCyan else TextSecondary),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp).width(40.dp)
+        )
+
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            ArtworkImage(url = track.artworkUrl, contentDescription = track.title)
+        }
+
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.Center) {
+            Text(track.title, style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary, fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+
+        Text(
+            formatTime(track.durationMs),
+            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary),
+            modifier = Modifier.padding(end = 16.dp).width(60.dp)
+        )
+
+        IconButton(onClick = onMoreClick) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = TextSecondary)
+        }
+    }
+}
+
+@Composable
+fun ArtworkImage(url: String?, contentDescription: String) {
+    Box(
+        modifier = Modifier.fillMaxSize(),
+        contentAlignment = Alignment.Center
+    ) {
+        if (url != null && url.isNotBlank()) {
+            // For remote images, show placeholder for now
+            // In a real app, you'd use a library like Coil or load the image manually
+            Text(url.take(1).uppercase(), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        } else {
+            Text(contentDescription.take(1).uppercase(), color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+        }
+    }
+}

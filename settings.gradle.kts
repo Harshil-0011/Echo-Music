@@ -12,28 +12,4 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "echomusic"
-include(
-    ":app",
-    ":innertube",
-    ":paxsenixlyrics",
-    ":kugou",
-    ":betterlyrics",
-    ":lrclib",
-    ":simpmusic",
-    ":youlyplus",
-    ":shazamkit",
-    ":artistvideo",
-    ":canvas",
-    ":echomusiccanvas",
-    ":applecanvas",
-    ":unison",
-    ":core",
-    ":lyrics",
-    ":playback",
-    ":usbaudio",
-    ":metadata",
-    ":dsp-core",
-    ":audio-dsp",
-    ":domain",
-    ":desktop"
-)
+include(":desktop")

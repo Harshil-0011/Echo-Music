@@ -1,0 +1,284 @@
+package echo.music.iad1tya.ui.screens.settings
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.db.MusicDatabase
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingsScreen(
+    preferences: LocalPreferences,
+    onBackClick: () -> Unit = {}
+) {
+    val scope = rememberCoroutineScope()
+    val darkMode by preferences.observeKey("dark_mode", true).collectAsState(initial = true)
+    val pureBlack by preferences.observeKey("pure_black", false).collectAsState(initial = false)
+    val liquidGlass by preferences.observeKey("liquid_glass", true).collectAsState(initial = true)
+    var volumePref by remember { mutableStateOf(preferences.getInt("default_volume", 80)) }
+    var uiDensity by remember { mutableStateOf(preferences.getString("ui_density", "normal")) }
+    var crossfade by remember { mutableStateOf(preferences.getBoolean("crossfade", false)) }
+    var gapless by remember { mutableStateOf(preferences.getBoolean("gapless", true)) }
+    var dataSaver by remember { mutableStateOf(preferences.getBoolean("data_saver", false)) }
+    var pauseOnMute by remember { mutableStateOf(preferences.getBoolean("pause_on_mute", true)) }
+    var resumeOnBt by remember { mutableStateOf(preferences.getBoolean("resume_on_bt", true)) }
+    var lyricsProvider by remember { mutableStateOf(preferences.getString("lyrics_provider", "lrclib")) }
+    var equalizerPreset by remember { mutableStateOf(preferences.getString("equalizer_preset", "flat")) }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        // Top Bar
+        Surface(
+            color = if (preferences.getBoolean("pure_black", false)) Color.Black else VoidSlateSurface,
+            modifier = Modifier.fillMaxWidth().height(64.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                }
+                Text(
+                    "Settings",
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 22.sp,
+                        color = ElectricCyan
+                    )
+                )
+            }
+        }
+
+        // Scrollable Content
+        androidx.compose.foundation.lazy.LazyColumn(
+            modifier = Modifier.fillMaxSize(),
+            contentPadding = PaddingValues(bottom = 100.dp), // Space for close button
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item { Spacer(Modifier.height(16.dp)) }
+
+            // Appearance
+            SettingsGroup("Appearance") {
+                SettingsRow("Dark Mode", "Use dark theme") {
+                    Switch(checked = darkMode, onCheckedChange = { preferences.putBoolean("dark_mode", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("Pure Black", "Use pure black background in dark theme") {
+                    Switch(checked = pureBlack, onCheckedChange = { preferences.putBoolean("pure_black", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("Liquid Glass", "Enable frosted glass blur effects") {
+                    Switch(checked = liquidGlass, onCheckedChange = { preferences.putBoolean("liquid_glass", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("UI Density", uiDensity.capitalize()) {
+                    OutlinedButton(onClick = { }) {
+                        Text(uiDensity.capitalize(), color = ElectricCyan)
+                    }
+                }
+                SettingsRow("Theme Color", "Choose accent color") {
+                    OutlinedButton(onClick = { /* color picker */ }) {
+                        Text("Electric Cyan", color = ElectricCyan)
+                    }
+                }
+            }
+
+            // Audio
+            SettingsGroup("Audio") {
+                SettingsRow("Default Volume", "$volumePref%") {
+                    Slider(
+                        value = volumePref.toFloat(),
+                        onValueChange = { volumePref = it.toInt(); preferences.putInt("default_volume", it.toInt()) },
+                        valueRange = 0f..100f,
+                        colors = SliderDefaults.colors(thumbColor = ElectricCyan, activeTrackColor = ElectricCyan)
+                    )
+                }
+                SettingsRow("Crossfade", "Smooth transitions between tracks") {
+                    Switch(checked = crossfade, onCheckedChange = { preferences.putBoolean("crossfade", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("Gapless Playback", "Play tracks without gaps") {
+                    Switch(checked = gapless, onCheckedChange = { preferences.putBoolean("gapless", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("Equalizer", "Audio equalizer settings") {
+                    OutlinedButton(onClick = { /* open equalizer */ }) {
+                        Text(equalizerPreset.capitalize(), color = ElectricCyan)
+                    }
+                }
+            }
+
+            // Playback
+            SettingsGroup("Playback") {
+                SettingsRow("Data Saver", "Reduce data usage on cellular") {
+                    Switch(checked = dataSaver, onCheckedChange = { preferences.putBoolean("data_saver", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("Pause on Mute", "Auto-pause when system is muted") {
+                    Switch(checked = pauseOnMute, onCheckedChange = { preferences.putBoolean("pause_on_mute", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("Resume on Bluetooth", "Resume when headphones reconnect") {
+                    Switch(checked = resumeOnBt, onCheckedChange = { preferences.putBoolean("resume_on_bt", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("Lyrics Provider", "Choose lyrics source") {
+                    OutlinedButton(onClick = { /* show provider dialog */ }) {
+                        Text(lyricsProvider.capitalize(), color = ElectricCyan)
+                    }
+                }
+            }
+
+            // Library
+            SettingsGroup("Library") {
+                SettingsRow("Auto Download", "Auto-download liked songs") {
+                    Switch(checked = false, onCheckedChange = { }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+                SettingsRow("Cache Size", "Manage offline storage") {
+                    OutlinedButton(onClick = { /* storage management */ }) {
+                        Text("2.3 GB used", color = ElectricCyan)
+                    }
+                }
+                SettingsRow("Import Library", "Import from other apps") {
+                    OutlinedButton(onClick = { /* import */ }) {
+                        Text("Import", color = ElectricCyan)
+                    }
+                }
+            }
+
+            // Playback
+            SettingsGroup("Playback") {
+                SettingsRow("Crossfade Duration", "Crossfade between tracks") {
+                    OutlinedButton(onClick = { }) {
+                        Text("5 seconds", color = ElectricCyan)
+                    }
+                }
+                SettingsRow("Gapless Playback", "Seamless playback") {
+                    Switch(checked = gapless, onCheckedChange = { preferences.putBoolean("gapless", it) }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                }
+            }
+
+            // About
+            SettingsGroup("About") {
+                SettingsRow("Echo Music Desktop", "Version 1.4.3") {}
+                SettingsRow("License", "GPL-3.0") {}
+                SettingsRow("Source Code", "github.com/Harshil-0011/Echo-Music") {
+                    TextButton(onClick = { SystemUtils.openUrl("https://github.com/Harshil-0011/Echo-Music") }) {
+                        Text("Open", color = ElectricCyan)
+                    }
+                }
+                SettingsRow("Support", "buymeacoffee.com/iad1tya") {
+                    TextButton(onClick = { SystemUtils.openUrl("https://buymeacoffee.com/iad1tya") }) {
+                        Text("Open", color = ElectricCyan)
+                    }
+                }
+                SettingsRow("Legal", "Privacy Policy & Terms") {
+                    TextButton(onClick = { SystemUtils.openUrl("https://echomusic.fun/privacy") }) {
+                        Text("Open", color = ElectricCyan)
+                    }
+                }
+            }
+
+            // Keyboard Shortcuts
+            SettingsGroup("Keyboard Shortcuts") {
+                SettingsRow("Space", "Play / Pause") {}
+                SettingsRow("← / →", "Seek 5 seconds") {}
+                SettingsRow("L", "Toggle lyrics") {}
+                SettingsRow("O", "Open local file") {}
+                SettingsRow("Esc", "Close dialogs") {}
+                SettingsRow("↑ / ↓", "Volume up/down") {}
+                SettingsRow("M", "Mute") {}
+            }
+
+            // Danger Zone
+            SettingsGroup("Danger Zone") {
+                SettingsRow("Clear Cache", "Remove all cached data") {
+                    OutlinedButton(onClick = { /* clear cache */ }, colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF5252))) {
+                        Text("Clear", color = Color(0xFFFF5252))
+                    }
+                }
+                SettingsRow("Reset Settings", "Reset all settings to defaults") {
+                    OutlinedButton(onClick = { /* reset settings */ }, colors = ButtonDefaults.outlinedButtonColors(contentColor = Color(0xFFFF5252))) {
+                        Text("Reset", color = Color(0xFFFF5252))
+                    }
+                }
+                SettingsRow("Export Data", "Export your library and settings") {
+                    OutlinedButton(onClick = { /* export */ }) {
+                        Text("Export", color = ElectricCyan)
+                    }
+                }
+            }
+
+            item { Spacer(Modifier.height(100.dp)) } // Space for close button
+        }
+    }
+
+    // Close button at bottom
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp)
+    ) {
+        Button(
+            onClick = onBackClick,
+            colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black),
+            modifier = Modifier.width(120.dp).align(Alignment.BottomCenter)
+        ) {
+            Text("Done", fontWeight = FontWeight.Bold)
+        }
+    }
+}
+
+@Composable
+fun SettingsGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricCyan), modifier = Modifier.padding(horizontal = 24.dp))
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(16.dp), modifier = Modifier.padding(horizontal = 16.dp)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                content()
+            }
+        }
+    }
+}
+
+@Composable
+fun SettingsRow(title: String, subtitle: String, trailing: @Composable () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
+        }
+        trailing()
+    }
+}
+
+

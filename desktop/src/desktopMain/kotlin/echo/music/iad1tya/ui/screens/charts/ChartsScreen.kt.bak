@@ -1,0 +1,210 @@
+package echo.music.iad1tya.ui.screens.charts
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.*
+import echo.music.iad1tya.desktop.db.MusicDatabase
+import echo.music.iad1tya.desktop.network.InnerTubeClient
+import echo.music.iad1tya.desktop.playback.DesktopPlaybackEngine
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ChartsScreen(
+    innerTube: InnerTubeClient,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope,
+    onBackClick: () -> Unit = {}
+) {
+    var charts by remember { mutableStateOf(listOf<SongModel>()) }
+    var isLoading by remember { mutableStateOf(true) }
+    var selectedChart by remember { mutableStateOf("top_songs") }
+
+    val chartTypes = listOf(
+        "top_songs" to "Top Songs",
+        "top_albums" to "Top Albums",
+        "top_artists" to "Top Artists",
+        "trending" to "Trending",
+        "viral" to "Viral",
+        "new_releases" to "New Releases"
+    )
+
+    if (charts.isEmpty() && isLoading) {
+        LaunchedEffect(Unit) {
+            try {
+                val result = innerTube.search("trending")
+                charts = result.songs.take(50)
+                isLoading = false
+            } catch (e: Exception) {
+                e.printStackTrace()
+                isLoading = false
+            }
+        }
+    }
+
+    val scopeInner = rememberCoroutineScope()
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // Top Bar
+            Surface(
+                color = VoidSlateSurface,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = { onBackClick() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                    }
+                    Text(
+                        "Charts",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            color = ElectricCyan
+                        )
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedButton(onClick = { /* refresh */ }) {
+                            Icon(Icons.Filled.Refresh, contentDescription = "Refresh", modifier = Modifier.size(20.dp))
+                        }
+                    }
+                }
+            }
+
+            // Chart Type Tabs
+            TabRow(
+                selectedTabIndex = chartTypes.indexOfFirst { it.first == selectedChart },
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = ElectricCyan,
+                indicator = { tabPositions ->
+                    TabRowDefaults.Indicator(
+                        Modifier
+                            .offset(x = tabPositions[chartTypes.indexOfFirst { it.first == selectedChart }].left)
+                            .width(tabPositions[chartTypes.indexOfFirst { it.first == selectedChart }].width)
+                            .height(3.dp)
+                            .background(ElectricCyan)
+                    )
+                }
+            ) {
+                chartTypes.forEach { (key, label) ->
+                    Tab(selected = selectedChart == key, onClick = { selectedChart = key }, text = { Text(label) })
+                }
+            }
+
+            // Content
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                if (isLoading) {
+                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                } else {
+                    LazyColumn(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                        items(charts.size) { index ->
+                            val track = charts[index]
+                            ChartTrackRow(
+                                track = track,
+                                rank = index + 1,
+                                playerEngine = playerEngine,
+                                database = database,
+                                scope = scope
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Bottom player bar handled by main app
+        }
+    }
+}
+
+@Composable
+fun ChartTrackRow(
+    track: SongModel,
+    rank: Int,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable { scope.launch { playerEngine.loadAndPlay(track) } }
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { scope.launch { playerEngine.loadAndPlay(track) } }) }
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
+    ) {
+        // Rank
+        Text(
+            "#$rank",
+            style = MaterialTheme.typography.titleMedium.copy(color = if (rank <= 3) AccentMagenta else TextSecondary, fontWeight = FontWeight.Bold),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp).width(60.dp)
+        )
+
+        // Artwork
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            ArtworkImage(url = track.artworkUrl, contentDescription = track.title)
+        }
+
+        // Track info
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.Center) {
+            Text(track.title, style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = TextPrimary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+
+        // Duration
+        Text(
+            formatTime(track.durationMs),
+            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary),
+            modifier = Modifier.padding(end = 16.dp).width(60.dp)
+        )
+
+        // More button
+        IconButton(onClick = { /* show menu */ }) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = TextSecondary)
+        }
+    }
+
+    
+
+    
+

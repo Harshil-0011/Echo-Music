@@ -1,12 +1,8 @@
-package echo.music.iad1tya.platform
+package echo.music.iad1tya.desktop.playback
 
-import java.io.BufferedInputStream
-import java.io.File
-import java.net.HttpURLConnection
-import java.net.URL
-import javax.sound.sampled.AudioSystem
-import javax.sound.sampled.FloatControl
-import javax.sound.sampled.SourceDataLine
+import echo.music.iad1tya.desktop.network.InnerTubeClient
+import echo.music.iad1tya.desktop.models.PlaybackState
+import echo.music.iad1tya.desktop.models.SongModel
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -14,43 +10,58 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import java.io.BufferedInputStream
+import java.io.File
+import java.net.HttpURLConnection
+import java.net.URL
+import javax.sound.sampled.AudioSystem
+import javax.sound.sampled.FloatControl
+import javax.sound.sampled.SourceDataLine
 
-actual class AudioPlayerEngine actual constructor() {
+class DesktopPlaybackEngine(
+    private val innerTube: InnerTubeClient
+) {
     private val scope = CoroutineScope(Dispatchers.IO)
     private var playJob: Job? = null
 
     private val _isPlaying = MutableStateFlow(false)
-    actual val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
+    val isPlaying: StateFlow<Boolean> = _isPlaying.asStateFlow()
 
     private val _positionMs = MutableStateFlow(0L)
-    actual val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
+    val positionMs: StateFlow<Long> = _positionMs.asStateFlow()
 
     private val _durationMs = MutableStateFlow(0L)
-    actual val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
+    val durationMs: StateFlow<Long> = _durationMs.asStateFlow()
 
     private val _volume = MutableStateFlow(1.0f)
-    actual val volume: StateFlow<Float> = _volume.asStateFlow()
+    val volume: StateFlow<Float> = _volume.asStateFlow()
 
-    private val _playerState = MutableStateFlow(PlayerState.IDLE)
-    actual val playerState: StateFlow<PlayerState> = _playerState.asStateFlow()
+    private val _playerState = MutableStateFlow(PlaybackState.IDLE)
+    val playerState: StateFlow<PlaybackState> = _playerState.asStateFlow()
 
-    private val _currentTrack = MutableStateFlow<TrackInfo?>(null)
-    actual val currentTrack: StateFlow<TrackInfo?> = _currentTrack.asStateFlow()
+    private val _currentTrack = MutableStateFlow<SongModel?>(null)
+    val currentTrack: StateFlow<SongModel?> = _currentTrack.asStateFlow()
 
     private var activeLine: SourceDataLine? = null
     @Volatile private var isPausedFlag = false
     @Volatile private var isStoppedFlag = false
 
-    actual fun loadAndPlay(track: TrackInfo, headers: Map<String, String>) {
+    suspend fun loadAndPlay(song: SongModel) {
         stop()
-        _currentTrack.value = track
-        _durationMs.value = track.durationMs
+        _currentTrack.value = song
+        _durationMs.value = song.durationMs
         _positionMs.value = 0L
-        _playerState.value = PlayerState.BUFFERING
+        _playerState.value = PlaybackState.BUFFERING
 
-        val audioUrl = track.audioUrl
+        val audioUrl = song.audioUrl
         if (audioUrl.isNullOrEmpty()) {
-            _playerState.value = PlayerState.ERROR
+            val streamUrl = innerTube.getStreamUrl(song.id)
+            if (streamUrl != null) {
+                playHttpStream(streamUrl, emptyMap())
+            } else {
+                _playerState.value = PlaybackState.ERROR
+                _isPlaying.value = false
+            }
             return
         }
 
@@ -60,13 +71,13 @@ actual class AudioPlayerEngine actual constructor() {
         playJob = scope.launch {
             try {
                 if (audioUrl.startsWith("http://") || audioUrl.startsWith("https://")) {
-                    playHttpStream(audioUrl, headers)
+                    playHttpStream(audioUrl, emptyMap())
                 } else {
                     playLocalFile(File(audioUrl))
                 }
             } catch (e: Exception) {
                 e.printStackTrace()
-                _playerState.value = PlayerState.ERROR
+                _playerState.value = PlaybackState.ERROR
                 _isPlaying.value = false
             }
         }
@@ -97,7 +108,7 @@ actual class AudioPlayerEngine actual constructor() {
             setLineVolume(line, _volume.value)
 
             _isPlaying.value = true
-            _playerState.value = PlayerState.PLAYING
+            _playerState.value = PlaybackState.PLAYING
 
             val buffer = ByteArray(4096)
             var totalBytesRead = 0L
@@ -127,14 +138,14 @@ actual class AudioPlayerEngine actual constructor() {
         }
 
         if (!isStoppedFlag) {
-            _playerState.value = PlayerState.ENDED
+            _playerState.value = PlaybackState.ENDED
             _isPlaying.value = false
         }
     }
 
     private fun playLocalFile(file: File) {
         if (!file.exists()) {
-            _playerState.value = PlayerState.ERROR
+            _playerState.value = PlaybackState.ERROR
             return
         }
         val audioStream = AudioSystem.getAudioInputStream(file)
@@ -148,7 +159,7 @@ actual class AudioPlayerEngine actual constructor() {
         setLineVolume(line, _volume.value)
 
         _isPlaying.value = true
-        _playerState.value = PlayerState.PLAYING
+        _playerState.value = PlaybackState.PLAYING
 
         val buffer = ByteArray(4096)
         var totalBytesRead = 0L
@@ -177,7 +188,7 @@ actual class AudioPlayerEngine actual constructor() {
         activeLine = null
 
         if (!isStoppedFlag) {
-            _playerState.value = PlayerState.ENDED
+            _playerState.value = PlaybackState.ENDED
             _isPlaying.value = false
         }
     }
@@ -199,23 +210,23 @@ actual class AudioPlayerEngine actual constructor() {
         }
     }
 
-    actual fun play() {
+    fun play() {
         if (isPausedFlag) {
             isPausedFlag = false
             _isPlaying.value = true
-            _playerState.value = PlayerState.PLAYING
+            _playerState.value = PlaybackState.PLAYING
         }
     }
 
-    actual fun pause() {
+    fun pause() {
         if (_isPlaying.value) {
             isPausedFlag = true
             _isPlaying.value = false
-            _playerState.value = PlayerState.PAUSED
+            _playerState.value = PlaybackState.PAUSED
         }
     }
 
-    actual fun stop() {
+    fun stop() {
         isStoppedFlag = true
         isPausedFlag = false
         playJob?.cancel()
@@ -226,20 +237,20 @@ actual class AudioPlayerEngine actual constructor() {
         } catch (_: Exception) {}
         activeLine = null
         _isPlaying.value = false
-        _playerState.value = PlayerState.IDLE
+        _playerState.value = PlaybackState.IDLE
     }
 
-    actual fun seekTo(positionMs: Long) {
+    fun seekTo(positionMs: Long) {
         _positionMs.value = positionMs
     }
 
-    actual fun setVolume(volume: Float) {
+    fun setVolume(volume: Float) {
         val clamped = volume.coerceIn(0.0f, 1.0f)
         _volume.value = clamped
         activeLine?.let { setLineVolume(it, clamped) }
     }
 
-    actual fun release() {
+    fun release() {
         stop()
     }
 }

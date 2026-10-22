@@ -1,0 +1,119 @@
+package echo.music.iad1tya.ui.screens
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SettingDialoge(
+    onDismissRequest: () -> Unit,
+    onNavigate: (String) -> Unit,
+    homeViewModel: echo.music.iad1tya.viewmodels.HomeViewModel
+) {
+    val scope = rememberCoroutineScope()
+    val darkMode by remember { mutableStateOf(false) }
+    val pureBlack by remember { mutableStateOf(false) }
+    val liquidGlass by remember { mutableStateOf(true) }
+
+    AlertDialog(
+        onDismissRequest = onDismissRequest,
+        title = { Text("Settings", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold)) },
+        dismissButton = null,
+        confirmButton = {
+            TextButton(onClick = onDismissRequest) {
+                Text("Done", style = TextStyle(color = ElectricCyan, fontWeight = FontWeight.Bold))
+            }
+        },
+        text = {
+            Column(modifier = Modifier.width(600.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SettingsGroup("Appearance") {
+                    SettingsRow("Dark Mode", "Use dark theme") {
+                        Switch(checked = false, onCheckedChange = { }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                    }
+                    SettingsRow("Pure Black", "Use pure black background in dark theme") {
+                        Switch(checked = false, onCheckedChange = { }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                    }
+                    SettingsRow("Liquid Glass", "Enable frosted glass blur effects") {
+                        Switch(checked = true, onCheckedChange = { }, colors = SwitchDefaults.colors(checkedThumbColor = ElectricCyan, checkedTrackColor = ElectricCyan.copy(alpha = 0.4f)))
+                    }
+                }
+
+                SettingsGroup("Audio") {
+                    SettingsRow("Default Volume", "80%") {
+                        Slider(
+                            value = 80f,
+                            onValueChange = { },
+                            valueRange = 0f..100f,
+                            colors = SliderDefaults.colors(thumbColor = ElectricCyan, activeTrackColor = ElectricCyan)
+                        )
+                    }
+                }
+
+                SettingsGroup("About") {
+                    SettingsRow("Echo Music Desktop", "Version 1.4.3") {}
+                    SettingsRow("License", "GPL-3.0") {}
+                    SettingsRow("Support", "buymeacoffee.com/iad1tya") {
+                        TextButton(onClick = { SystemUtils.openUrl("https://buymeacoffee.com/iad1tya") }) {
+                            Text("Open", color = ElectricCyan)
+                        }
+                    }
+                    SettingsRow("Legal", "Privacy Policy & Terms") {
+                        TextButton(onClick = { SystemUtils.openUrl("https://echomusic.fun/privacy") }) {
+                            Text("Open", color = ElectricCyan)
+                        }
+                    }
+                }
+            }
+        }
+    )
+}
+
+@Composable
+fun SettingsGroup(title: String, content: @Composable () -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        Text(title, style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricCyan))
+        Surface(color = MaterialTheme.colorScheme.surfaceContainerHigh, shape = RoundedCornerShape(16.dp)) {
+            Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp), content = content)
+        }
+    }
+}
+
+@Composable
+fun SettingsRow(title: String, subtitle: String, trailing: @Composable () -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth(),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Column(Modifier.weight(1f)) {
+            Text(title, style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary))
+            Text(subtitle, style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
+        }
+        trailing()
+    }
+}
+
+

@@ -14,4 +14,15 @@ expect class LocalPreferences() {
     fun getStringSet(key: String, defaultValue: Set<String> = emptySet()): Set<String>
     fun putStringSet(key: String, value: Set<String>)
     fun <T> observeKey(key: String, defaultValue: T): StateFlow<T>
+    fun clear()
+    fun remove(key: String)
+}
+
+expect object SystemUtils {
+    fun copyToClipboard(text: String, label: String = "Echo Music")
+    fun getClipboardText(): String?
+    fun openUrl(url: String)
+    fun showNotification(title: String, message: String)
+    fun showToast(message: String)
+    fun pickFile(): java.io.File?
 }

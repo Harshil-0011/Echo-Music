@@ -1,0 +1,341 @@
+﻿package echo.music.iad1tya.ui.screens.search
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.pointerInput
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.*
+import echo.music.iad1tya.desktop.db.MusicDatabase
+import echo.music.iad1tya.desktop.network.InnerTubeClient
+import echo.music.iad1tya.desktop.playback.DesktopPlaybackEngine
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import echo.music.iad1tya.ui.*
+import echo.music.iad1tya.ui.component.ArtworkImage
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun SearchScreen(
+    innerTube: InnerTubeClient,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope,
+    initialQuery: String = "",
+    onBackClick: () -> Unit = {}
+) {
+    var query by remember { mutableStateOf(initialQuery) }
+    var results by remember { mutableStateOf(listOf<SongModel>()) }
+    var isSearching by remember { mutableStateOf(false) }
+    var selectedTab by remember { mutableStateOf(0) }
+
+    val tabs = listOf("Songs", "Albums", "Artists", "Playlists")
+
+    val scopeInner = rememberCoroutineScope()
+    val searchFocus = remember { FocusRequester() }
+
+    var isSearchingLocal by remember { mutableStateOf(false) }
+    var localResults by remember { mutableStateOf(listOf<SongModel>()) }
+
+    fun performSearch() {
+        if (query.isBlank()) return
+        isSearching = true
+        scope.launch {
+            try {
+                val result = innerTube.search(query)
+                results = result.songs
+                isSearching = false
+            } catch (e: Exception) {
+                e.printStackTrace()
+                isSearching = false
+            }
+        }
+    }
+
+    val searchBar = @Composable {
+        Surface(
+            color = MaterialTheme.colorScheme.surfaceContainer,
+            modifier = Modifier.fillMaxWidth().height(64.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxSize().padding(horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                IconButton(onClick = onBackClick) {
+                    Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                }
+                OutlinedTextField(
+                    value = query,
+                    onValueChange = { query = it },
+                    placeholder = { Text("Search songs, artists, albums, playlists...", color = TextSecondary) },
+                    singleLine = true,
+                    shape = RoundedCornerShape(24.dp),
+                    colors = OutlinedTextFieldDefaults.colors(
+                        focusedContainerColor = VoidSlateCard,
+                        unfocusedContainerColor = VoidSlateCard,
+                        focusedBorderColor = ElectricCyan,
+                        unfocusedBorderColor = Color.Transparent,
+                        focusedTextColor = TextPrimary,
+                        unfocusedTextColor = TextPrimary
+                    ),
+                    leadingIcon = { Icon(Icons.Filled.Search, contentDescription = null, tint = TextSecondary) },
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp)
+                        .focusRequester(searchFocus)
+                        .padding(end = 8.dp)
+                )
+                IconButton(onClick = { 
+                    if (query.isNotBlank()) {
+                        performSearch()
+                    }
+                }) {
+                    Icon(Icons.Filled.Send, contentDescription = "Search", tint = ElectricCyan)
+                }
+            }
+        }
+    }
+
+    // Local search
+    LaunchedEffect(query) {
+        if (query.isNotBlank()) {
+            isSearchingLocal = true
+            scope.launch {
+                try {
+                    val localSongs = database.getAllSongs().filter { it.title.contains(query, true) || it.artist.contains(query, true) }
+                    localResults = localSongs
+                    isSearchingLocal = false
+                } catch (e: Exception) {
+                    isSearchingLocal = false
+                }
+            }
+        }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            searchBar()
+
+            // Tabs
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = ElectricCyan,
+                indicator = { tabPositions ->
+                    TabRowDefaults.Indicator(
+                        Modifier
+                            .offset(x = tabPositions[selectedTab].left)
+                            .width(tabPositions[selectedTab].width)
+                            .height(3.dp)
+                            .background(ElectricCyan)
+                    )
+                }
+            ) {
+                tabs.forEach { tab ->
+                    Tab(selected = selectedTab == tabs.indexOf(tab), onClick = { selectedTab = tabs.indexOf(tab) }, text = { Text(tab) })
+                }
+            }
+
+            // Content
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                when (selectedTab) {
+                    0 -> SearchSongsContent(
+                        results = results,
+                        isSearching = isSearching,
+                        localResults = localResults,
+                        isSearchingLocal = isSearchingLocal,
+                        playerEngine = playerEngine,
+                        database = database,
+                        scope = scope
+                    )
+                    1 -> SearchAlbumsContent()
+                    2 -> SearchArtistsContent()
+                    3 -> SearchPlaylistsContent()
+                }
+            }
+
+            // Bottom player bar handled by main app
+        }
+    }
+}
+
+@Composable
+fun SearchSongsContent(
+    results: List<SongModel>,
+    isSearching: Boolean,
+    localResults: List<SongModel>,
+    isSearchingLocal: Boolean,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope
+) {
+    val scopeInner = rememberCoroutineScope()
+
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        if (isSearching) {
+            CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+        } else if (results.isEmpty() && localResults.isEmpty()) {
+            Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Icon(Icons.Filled.SearchOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(64.dp))
+                    Text("No results found", style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary))
+                    Text("Try a different search term", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                }
+            }
+        } else {
+            if (localResults.isNotEmpty()) {
+                Text("Local Files", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricCyan))
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    items(localResults.size) { index ->
+                        val track = localResults[index]
+                        AlbumTrackRow(
+                            track = track,
+                            index = index + 1,
+                            isPlaying = false,
+                            onClick = { scope.launch { playerEngine.loadAndPlay(track) } },
+                            onMoreClick = { /* show menu */ }
+                        )
+                    }
+                }
+            }
+
+            if (results.isNotEmpty()) {
+                Text("YouTube Music Results", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricCyan))
+                LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                    items(results.size) { index ->
+                        val track = results[index]
+                        AlbumTrackRow(
+                            track = track,
+                            index = index + 1,
+                            isPlaying = false,
+                            onClick = { scopeInner.launch { playerEngine.loadAndPlay(track) } },
+                            onMoreClick = { /* show menu */ }
+                        )
+                    }
+                }
+            }
+        }
+    }
+}@Composable fun SearchAlbumsContent() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.Album, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(64.dp))
+            Text("Albums", style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary))
+            Text("Album search coming soon", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+        }
+    }
+}
+
+@Composable
+fun SearchArtistsContent() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.Person, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(64.dp))
+            Text("Artists", style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary))
+            Text("Artist search coming soon", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+        }
+    }
+}
+
+@Composable
+fun SearchPlaylistsContent() {
+    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Icon(Icons.Filled.PlaylistPlay, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(64.dp))
+            Text("Playlists", style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary))
+            Text("Playlist search coming soon", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+        }
+    }
+}
+
+@Composable
+fun AlbumTrackRow(
+    track: SongModel,
+    index: Int,
+    isPlaying: Boolean,
+    onClick: () -> Unit,
+    onMoreClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp, vertical = 8.dp)
+            .clickable { onClick() }
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onClick() }) }
+            .background(MaterialTheme.colorScheme.surfaceContainerHigh, RoundedCornerShape(12.dp))
+    ) {
+        Text(
+            "$index",
+            style = MaterialTheme.typography.bodyMedium.copy(color = if (isPlaying) ElectricCyan else TextSecondary),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp).width(40.dp)
+        )
+
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            ArtworkImage(url = track.artworkUrl, contentDescription = track.title)
+        }
+
+        Column(modifier = Modifier.weight(1f).padding(horizontal = 16.dp), verticalArrangement = Arrangement.Center) {
+            Text(track.title, style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary, fontWeight = if (isPlaying) FontWeight.Bold else FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+
+        Text(
+            formatTime(track.durationMs),
+            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary),
+            modifier = Modifier.padding(end = 16.dp).width(60.dp)
+        )
+
+        IconButton(onClick = onMoreClick) {
+            Icon(Icons.Filled.MoreVert, contentDescription = "More", tint = TextSecondary)
+        }
+    }
+}
+
+fun formatTime(ms: Long): String {
+    val totalSec = ms / 1000
+    val min = totalSec / 60
+    val sec = totalSec % 60
+    return "%d:%02d".format(min, sec)
+}
+
+

@@ -1,0 +1,272 @@
+﻿package echo.music.iad1tya.ui.screens.queue
+
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.pointerInput
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.*
+import echo.music.iad1tya.desktop.db.MusicDatabase
+import echo.music.iad1tya.desktop.playback.DesktopPlaybackEngine
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import androidx.compose.ui.text.style.TextOverflow
+import echo.music.iad1tya.ui.*
+import echo.music.iad1tya.ui.component.ArtworkImage
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun QueueScreen(
+    playerEngine: DesktopPlaybackEngine,
+    onClose: () -> Unit = {}
+) {
+    // In real implementation, would get from playerEngine queue
+    var queue by remember { mutableStateOf(listOf<SongModel>()) }
+    var currentIndex by remember { mutableStateOf(0) }
+    var history by remember { mutableStateOf(listOf<SongModel>()) }
+
+    // In real implementation, would observe playerEngine queue
+    // For now, demo data
+    if (queue.isEmpty()) {
+        LaunchedEffect(Unit) {
+            queue = List(5) { i ->
+                SongModel(
+                    id = "queue_$i",
+                    title = "Queued Song ${i + 1}",
+                    artist = "Artist ${i + 1}",
+                    durationMs = (180000 + (i * 10000)).toLong(),
+                    artworkUrl = null,
+                    audioUrl = ""
+                )
+            }
+        }
+    }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onClose()
+                    true
+                } else false
+            }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // Header
+            Surface(
+                color = VoidSlateSurface,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = onClose) {
+                        Icon(Icons.Filled.Close, contentDescription = "Close", tint = ElectricCyan)
+                    }
+                    Text(
+                        "Up Next",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            color = ElectricCyan
+                        )
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { /* clear queue */ }) {
+                            Icon(Icons.Filled.ClearAll, contentDescription = "Clear queue", tint = TextSecondary)
+                        }
+                        Text("${queue.size} songs", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                    }
+                }
+            }
+
+            // Queue List
+            Box(Modifier.weight(1f).fillMaxHeight()) {
+                if (queue.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Filled.QueueMusic, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(64.dp))
+                            Text("Queue is empty", style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary))
+                            Text("Add songs to build your queue", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                        }
+                    }
+                } else {
+                    Column(Modifier.fillMaxSize()) {
+                        // Now Playing
+                        if (queue.isNotEmpty()) {
+                            Surface(
+                                color = VoidSlateCard,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("Now Playing", style = MaterialTheme.typography.labelLarge.copy(color = ElectricCyan), modifier = Modifier.padding(16.dp, 16.dp))
+                                    QueueTrackRow(
+                                        track = queue[0],
+                                        index = 0,
+                                        isCurrent = true,
+                                        onClick = { /* play */ },
+                                        onRemove = { /* can't remove current */ }
+                                    )
+                                }
+                            }
+
+                        // Up Next
+                        if (queue.size > 1) {
+                            Surface(
+                                color = VoidSlateCard,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(16.dp, 8.dp),
+                                        horizontalArrangement = Arrangement.SpaceBetween
+                                    ) {
+                                        Text("Up Next", style = MaterialTheme.typography.labelLarge.copy(color = ElectricCyan))
+                                        Text("${queue.size - 1} songs", style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
+                                    }
+                                }
+                                LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                    items(queue.size - 1) { index ->
+                                        val track = queue[index + 1]
+                                        QueueTrackRow(
+                                            track = track,
+                                            index = index + 1,
+                                            isCurrent = false,
+                                            onClick = { /* move to top */ },
+                                            onRemove = { /* remove from queue */ }
+                                        )
+                                    }
+                                }
+                            }
+                        }
+
+                        // History
+                        if (history.isNotEmpty()) {
+                            Surface(
+                                color = VoidSlateCard,
+                                modifier = Modifier.fillMaxWidth().padding(16.dp)
+                            ) {
+                                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                    Text("History", style = MaterialTheme.typography.labelLarge.copy(color = ElectricCyan), modifier = Modifier.padding(16.dp, 16.dp))
+                                    LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+                                        items(history.size) { index ->
+                                            val track = history[index]
+                                            QueueTrackRow(
+                                                track = track,
+                                                index = index + queue.size,
+                                                isCurrent = false,
+                                                onClick = { /* replay */ },
+                                                onRemove = { /* remove from history */ }
+                                            )
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            // Bottom bar with queue controls
+            Surface(
+                color = VoidSlateSurface,
+                modifier = Modifier.fillMaxWidth().height(80.dp).padding(16.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                        IconButton(onClick = { /* repeat */ }) {
+                            Icon(Icons.Filled.Repeat, contentDescription = "Repeat", tint = TextSecondary)
+                        }
+                        IconButton(onClick = { /* shuffle */ }) {
+                            Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle", tint = ElectricCyan)
+                        }
+                        FilledIconButton(
+                            onClick = { /* play/pause */ },
+                            colors = IconButtonDefaults.filledIconButtonColors(containerColor = ElectricCyan, contentColor = Color.Black),
+                            modifier = Modifier.size(40.dp)
+                        ) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = "Play")
+                        }
+                        IconButton(onClick = { /* next */ }) {
+                            Icon(Icons.Filled.SkipNext, contentDescription = "Next", tint = TextSecondary)
+                        }
+                    }
+                    Text("Queue", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun QueueTrackRow(
+    track: SongModel,
+    index: Int,
+    isCurrent: Boolean,
+    onClick: () -> Unit,
+    onRemove: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp, 8.dp)
+            .clickable { onClick() }
+            .pointerInput(Unit) { detectTapGestures(onDoubleTap = { onClick() }) }
+            .background(if (isCurrent) ElectricCyan.copy(alpha = 0.1f) else Color.Transparent, RoundedCornerShape(12.dp))
+    ) {
+        Text(
+            "${index + 1}",
+            style = MaterialTheme.typography.bodyMedium.copy(color = if (isCurrent) ElectricCyan else TextSecondary),
+            modifier = Modifier.padding(start = 16.dp, end = 16.dp).width(40.dp)
+        )
+
+        Box(
+            modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+            contentAlignment = Alignment.Center
+        ) {
+            ArtworkImage(url = track.artworkUrl, contentDescription = track.title)
+        }
+
+        Column(modifier = Modifier.weight(1f).padding(16.dp), verticalArrangement = Arrangement.Center) {
+            Text(track.title, style = MaterialTheme.typography.bodyLarge.copy(color = if (isCurrent) ElectricCyan else TextPrimary, fontWeight = if (isCurrent) FontWeight.Bold else FontWeight.Normal), maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary), maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+
+        Text(
+            formatTime(track.durationMs),
+            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary),
+            modifier = Modifier.padding(end = 16.dp).width(60.dp)
+        )
+
+        if (!isCurrent) {
+            IconButton(onClick = onRemove) {
+                Icon(Icons.Filled.RemoveCircle, contentDescription = "Remove from queue", tint = TextSecondary)
+            }
+        } else {
+            Box(modifier = Modifier.width(24.dp))
+        }

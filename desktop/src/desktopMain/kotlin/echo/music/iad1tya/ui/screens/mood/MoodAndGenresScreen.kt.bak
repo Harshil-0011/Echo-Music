@@ -1,0 +1,220 @@
+package echo.music.iad1tya.ui.screens.mood
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.*
+import echo.music.iad1tya.desktop.db.MusicDatabase
+import echo.music.iad1tya.desktop.network.InnerTubeClient
+import echo.music.iad1tya.desktop.playback.DesktopPlaybackEngine
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun MoodAndGenresScreen(
+    innerTube: InnerTubeClient,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope,
+    onBackClick: () -> Unit = {}
+) {
+    var moods by remember { mutableStateOf(listOf<MoodGenreItem>()) }
+    var genres by remember { mutableStateOf(listOf<MoodGenreItem>()) }
+    var selectedTab by remember { mutableStateOf(0) }
+    var isLoading by remember { mutableStateOf(true) }
+
+    val tabs = listOf("Moods", "Genres")
+
+    if (moods.isEmpty() && genres.isEmpty() && isLoading) {
+        LaunchedEffect(Unit) {
+            try {
+                // Demo moods
+                moods = listOf(
+                    MoodGenreItem("chill", "Chill", "Relax and unwind", Icons.Filled.Spa),
+                    MoodGenreItem("workout", "Workout", "High energy for exercise", Icons.Filled.FitnessCenter),
+                    MoodGenreItem("focus", "Focus", "Music for concentration", Icons.Filled.Psychology),
+                    MoodGenreItem("party", "Party", "Get the party started", Icons.Filled.Celebration),
+                    MoodGenreItem("sleep", "Sleep", "Relaxing bedtime music", Icons.Filled.Bedtime),
+                    MoodGenreItem("road_trip", "Road Trip", "Perfect for driving", Icons.Filled.DirectionsCar),
+                    MoodGenreItem("romance", "Romance", "Love songs", Icons.Filled.Favorite),
+                    MoodGenreItem("nostalgia", "Nostalgia", "Throwback hits", Icons.Filled.History),
+                )
+
+                // Demo genres
+                genres = listOf(
+                    MoodGenreItem("pop", "Pop", "Popular hits", Icons.Filled.MusicNote),
+                    MoodGenreItem("rock", "Rock", "Rock anthems", Icons.Filled.ElectricGuitar),
+                    MoodGenreItem("hiphop", "Hip Hop", "Hip hop & rap", Icons.Filled.Mic),
+                    MoodGenreItem("electronic", "Electronic", "EDM & electronic", Icons.Filled.Lightning),
+                    MoodGenreItem("rnb", "R&B", "Smooth R&B", Icons.Filled.Favorite),
+                    MoodGenreItem("country", "Country", "Country roads", Icons.Filled.Grass),
+                    MoodGenreItem("jazz", "Jazz", "Smooth jazz", Icons.Filled.Saxophone),
+                    MoodGenreItem("classical", "Classical", "Classical masterpieces", Icons.Filled.MusicNote),
+                    MoodGenreItem("indie", "Indie", "Independent artists", Icons.Filled.Star),
+                    MoodGenreItem("latin", "Latin", "Latin rhythms", Icons.Filled.Fire),
+                    MoodGenreItem("kpop", "K-Pop", "Korean pop", Icons.Filled.Star),
+                    MoodGenreItem("metal", "Metal", "Heavy metal", Icons.Filled.Lightning),
+                )
+
+                isLoading = false
+            } catch (e: Exception) {
+                e.printStackTrace()
+                isLoading = false
+            }
+        }
+    }
+
+    val tabs = listOf("Moods", "Genres")
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // Top Bar
+            Surface(
+                color = VoidSlateSurface,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = { onBackClick() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                    }
+                    Text(
+                        "Moods & Genres",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            color = ElectricCyan
+                        )
+                    )
+                }
+            }
+
+            // Tabs
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = ElectricCyan,
+                indicator = { tabPositions ->
+                    TabRowDefaults.Indicator(
+                        Modifier
+                            .offset(x = tabPositions[selectedTab].left)
+                            .width(tabPositions[selectedTab].width)
+                            .height(3.dp)
+                            .background(ElectricCyan)
+                    )
+                }
+            ) {
+                tabs.forEach { tab ->
+                    Tab(selected = selectedTab == tabs.indexOf(tab), onClick = { selectedTab = tabs.indexOf(tab) }, text = { Text(tab) })
+                }
+            }
+
+            // Content
+            Box(Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
+                if (isLoading) {
+                    CircularProgressIndicator(Modifier.align(Alignment.Center))
+                } else {
+                    LazyVerticalGrid(
+                        columns = GridCells.Adaptive(minSize = 180.dp),
+                        horizontalArrangement = Arrangement.spacedBy(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        items(if (selectedTab == 0) moods else genres) { item ->
+                            MoodGenreCard(
+                                item = item,
+                                onClick = { /* navigate to mood/genre playlist */ }
+                            )
+                        }
+                    }
+                }
+            }
+
+            // Bottom player bar handled by main app
+        }
+    }
+}
+
+@Composable
+fun MoodGenreCard(
+    item: MoodGenreItem,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .widthIn(min = 180.dp, max = 220.dp)
+            .clickable { onClick() }
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.linearGradient(listOf(ElectricCyan.copy(alpha = 0.6f), VoidSlateCardHover))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    item.icon,
+                    contentDescription = null,
+                    tint = Color.White,
+                    modifier = Modifier.size(48.dp)
+                )
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(item.title, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(item.description, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+data class MoodGenreItem(
+    val id: String,
+    val title: String,
+    val description: String,
+    val icon: androidx.compose.material.icons.filled.ImageVector
+)
+
+
+

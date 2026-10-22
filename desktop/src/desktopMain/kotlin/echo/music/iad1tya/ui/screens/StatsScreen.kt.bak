@@ -1,0 +1,223 @@
+package echo.music.iad1tya.ui.screens
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun StatsScreen(
+    onBackClick: () -> Unit = {}
+) {
+    var timeRange by remember { mutableStateOf("all_time") }
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // Top Bar
+            Surface(
+                color = VoidSlateSurface,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = { onBackClick() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                    }
+                    Text(
+                        "Stats",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            color = ElectricCyan
+                        )
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        OutlinedButton(onClick = { /* export */ }) {
+                            Text("Export", color = ElectricCyan)
+                        }
+                    }
+                }
+            }
+
+            // Time Range Tabs
+            TabRow(
+                selectedTabIndex = when (timeRange) {
+                    "week" -> 0
+                    "month" -> 1
+                    "year" -> 2
+                    else -> 3
+                },
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = ElectricCyan,
+                indicator = { tabPositions ->
+                    TabRowDefaults.Indicator(
+                        Modifier
+                            .offset(x = tabPositions[when (timeRange) { "week" -> 0; "month" -> 1; "year" -> 2; else -> 3 }].left)
+                            .width(tabPositions[when (timeRange) { "week" -> 0; "month" -> 1; "year" -> 2; else -> 3 }].width)
+                            .height(3.dp)
+                            .background(ElectricCyan)
+                    )
+                }
+            ) {
+                listOf("Week", "Month", "Year", "All Time").forEach { tab ->
+                    Tab(selected = timeRange == tab.toLowerCase().replace(" ", "_"), onClick = { timeRange = tab.toLowerCase().replace(" ", "_") }, text = { Text(tab) })
+                }
+            }
+
+            // Content
+            Box(Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
+                Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                    // Summary cards
+                    Row(modifier = Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                        StatCard("Total Time", "127h 32m", Icons.Filled.Timer, ElectricCyan)
+                        StatCard("Songs Played", "2,847", Icons.Filled.MusicNote, AccentMagenta)
+                        StatCard("Artists", "234", Icons.Filled.Person, AccentPurple)
+                        StatCard("Albums", "156", Icons.Filled.Album, ElectricCyan)
+                    }
+
+                    // Top Artists
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = VoidSlateCard),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Top Artists", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(listOf(
+                                    "The Weeknd" to "45 plays",
+                                    "Tame Impala" to "38 plays",
+                                    "Radiohead" to "32 plays",
+                                    "Arctic Monkeys" to "28 plays",
+                                    "Kendrick Lamar" to "25 plays"
+                                )) { (name, plays) ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(name, style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary))
+                                        Spacer(Modifier.weight(1f))
+                                        Text(plays, style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Top Songs
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = VoidSlateCard),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Top Songs", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(listOf(
+                                    "Blinding Lights" to "The Weeknd",
+                                    "Save Your Tears" to "The Weeknd",
+                                    "Levitating" to "Dua Lipa",
+                                    "Good 4 U" to "Olivia Rodrigo",
+                                    "Stay" to "The Kid LAROI & Justin Bieber"
+                                )) { (title, artist) ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(title, style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary))
+                                        Spacer(Modifier.weight(1f))
+                                        Text(artist, style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                    }
+                                }
+                            }
+                        }
+                    }
+
+                    // Top Albums
+                    Card(
+                        colors = CardDefaults.cardColors(containerColor = VoidSlateCard),
+                        shape = RoundedCornerShape(16.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(modifier = Modifier.padding(16.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text("Top Albums", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                            LazyColumn(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                                items(listOf(
+                                    "After Hours" to "The Weeknd",
+                                    "Currents" to "Tame Impala",
+                                    "Future Nostalgia" to "Dua Lipa",
+                                    "Sour" to "Olivia Rodrigo",
+                                    "Mr. Morale & The Big Steppers" to "Kendrick Lamar"
+                                )) { (title, artist) ->
+                                    Row(
+                                        modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                        verticalAlignment = Alignment.CenterVertically
+                                    ) {
+                                        Text(title, style = MaterialTheme.typography.bodyLarge.copy(color = TextPrimary))
+                                        Spacer(Modifier.weight(1f))
+                                        Text(artist, style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun StatCard(title: String, value: String, icon: androidx.compose.material.icons.filled.ImageVector, color: Color) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = VoidSlateCard),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier.weight(1f)
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(icon, contentDescription = null, tint = color, modifier = Modifier.size(32.dp))
+            Text(value, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+            Text(title, style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+        }
+    }
+}
+
+

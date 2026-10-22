@@ -1,0 +1,167 @@
+package echo.music.iad1tya.ui.screens
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.*
+import echo.music.iad1tya.desktop.db.MusicDatabase
+import echo.music.iad1tya.desktop.network.InnerTubeClient
+import echo.music.iad1tya.desktop.playback.DesktopPlaybackEngine
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HomeScreen(
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    innerTube: InnerTubeClient,
+    searchQuery: String
+) {
+    val scopeInner = rememberCoroutineScope()
+    var songs by remember { mutableStateOf(listOf<SongModel>()) }
+    var isLoading by remember { mutableStateOf(false) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    var loaded by remember { mutableStateOf(false) }
+    if (!loaded) {
+        loaded = true
+        LaunchedEffect(Unit) {
+            isLoading = true
+            try {
+                val result = innerTube.search("trending")
+                songs = result.songs.take(20)
+                for (song in songs) {
+                    database.saveSong(song)
+                }
+            } catch (e: Exception) {
+                error = e.message
+                e.printStackTrace()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    val filtered = remember(searchQuery, songs) {
+        if (searchQuery.isBlank()) songs
+        else songs.filter {
+            it.title.contains(searchQuery, true) || it.artist.contains(searchQuery, true) || it.album?.contains(searchQuery, true) == true
+        }
+    }
+
+    Column(
+        modifier = Modifier.fillMaxSize().padding(24.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp)
+    ) {
+        if (isLoading) {
+            CircularProgressIndicator(Modifier.align(Alignment.CenterHorizontally))
+        } else if (error != null) {
+            Text("Error: $error", color = Color(0xFFFF5252), style = MaterialTheme.typography.bodyMedium)
+        } else {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Text(
+                    "Quick Picks",
+                    style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                )
+                TextButton(onClick = { }) {
+                    Text("See All", color = ElectricCyan)
+                }
+            }
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                items(filtered.size) { index ->
+                    val track = filtered[index]
+                    Box(Modifier.widthIn(min = 200.dp, max = 260.dp)) {
+                        TrackCard(track) {
+                            scope.launch { playerEngine.loadAndPlay(track) }
+                        }
+                    }
+                }
+            }
+            Spacer(Modifier.height(24.dp))
+            Text(
+                "Smart Recommendations",
+                style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+            )
+            LazyRow(horizontalArrangement = Arrangement.spacedBy(16.dp)) {
+                val shuffled = songs.shuffled()
+                items(shuffled.size) { index ->
+                    val track = shuffled[index]
+                    Box(Modifier.width(180.dp)) {
+                        TrackCard(track, compact = true) {
+                            scopeInner.launch { playerEngine.loadAndPlay(track) }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun TrackCard(track: SongModel, compact: Boolean = false, onClick: () -> Unit) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .then(if (compact) Modifier.width(180.dp) else Modifier.fillMaxWidth())
+            .clickable { onClick() }
+            .pointerInput(Unit) {
+                detectTapGestures(onDoubleTap = { onClick() })
+            }
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.linearGradient(listOf(ElectricCyan.copy(alpha = 0.6f), MaterialTheme.colorScheme.surfaceContainerHigh))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(track.title.take(1).uppercase(), color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(track.title, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(track.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+        }
+    }
+}
+
+
+

@@ -1,0 +1,355 @@
+package echo.music.iad1tya.ui.screens.generate
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.*
+import echo.music.iad1tya.desktop.db.MusicDatabase
+import echo.music.iad1tya.desktop.network.InnerTubeClient
+import echo.music.iad1tya.desktop.playback.DesktopPlaybackEngine
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun GenerateScreen(
+    innerTube: InnerTubeClient,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    preferences: LocalPreferences,
+    scope: CoroutineScope,
+    onBackClick: () -> Unit = {}
+) {
+    var selectedTab by remember { mutableStateOf(0) }
+    var prompt by remember { mutableStateOf("") }
+    var isGenerating by remember { mutableStateOf(false) }
+    var generatedPlaylist by remember { mutableStateOf<PlaylistModel?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    val tabs = listOf("From Text", "From Song", "From Artist", "From Mood", "Random Mix")
+
+    val scopeInner = rememberCoroutineScope()
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        Column(Modifier.fillMaxSize()) {
+            // Top Bar
+            Surface(
+                color = VoidSlateSurface,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    IconButton(onClick = { onBackClick() }) {
+                        Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                    }
+                    Text(
+                        "Generate Playlist",
+                        style = MaterialTheme.typography.titleLarge.copy(
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 22.sp,
+                            color = ElectricCyan
+                        )
+                    )
+                }
+            }
+
+            // Tabs
+            TabRow(
+                selectedTabIndex = selectedTab,
+                containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                contentColor = ElectricCyan,
+                indicator = { tabPositions ->
+                    TabRowDefaults.Indicator(
+                        Modifier
+                            .offset(x = tabPositions[selectedTab].left)
+                            .width(tabPositions[selectedTab].width)
+                            .height(3.dp)
+                            .background(ElectricCyan)
+                    )
+                }
+            ) {
+                tabs.forEach { tab ->
+                    Tab(selected = selectedTab == tabs.indexOf(tab), onClick = { selectedTab = tabs.indexOf(tab) }, text = { Text(tab) })
+                }
+            }
+
+            // Content
+            Box(Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
+                when (selectedTab) {
+                    0 -> GenerateFromText(
+                        innerTube = innerTube,
+                        playerEngine = playerEngine,
+                        database = database,
+                        scope = scopeInner,
+                        prompt = prompt,
+                        onPromptChange = { prompt = it },
+                        onGenerate = { 
+                            isGenerating = true
+                            scope.launch {
+                                try {
+                                    // In real implementation, would call AI API
+                                    generatedPlaylist = PlaylistModel(
+                                        id = "generated_${System.currentTimeMillis()}",
+                                        title = "AI Generated: $prompt",
+                                        artworkUrl = null,
+                                        songCount = 20,
+                                        owner = "AI Generator"
+                                    )
+                                    isGenerating = false
+                                } catch (e: Exception) {
+                                    error = e.message
+                                    isGenerating = false
+                                }
+                            }
+                        },
+                        isGenerating = isGenerating,
+                        generatedPlaylist = generatedPlaylist,
+                        error = error
+                    )
+                    1 -> GenerateFromSeed(
+                        type = "song",
+                        innerTube = innerTube,
+                        playerEngine = playerEngine,
+                        database = database,
+                        scope = scopeInner
+                    )
+                    2 -> GenerateFromSeed(
+                        type = "artist",
+                        innerTube = innerTube,
+                        playerEngine = playerEngine,
+                        database = database,
+                        scope = scopeInner
+                    )
+                    3 -> GenerateFromMood(
+                        innerTube = innerTube,
+                        playerEngine = playerEngine,
+                        database = database,
+                        scope = scopeInner
+                    )
+                    4 -> GenerateRandom(
+                        innerTube = innerTube,
+                        playerEngine = playerEngine,
+                        database = database,
+                        scope = scopeInner
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GenerateFromText(
+    innerTube: InnerTubeClient,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope,
+    prompt: String,
+    onPromptChange: (String) -> Unit,
+    onGenerate: () -> Unit,
+    isGenerating: Boolean,
+    generatedPlaylist: PlaylistModel?,
+    error: String?
+) {
+    Column(Modifier.fillMaxSize(), verticalArrangement = Arrangement.spacedBy(24.dp)) {
+        Text("Describe your perfect playlist", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+
+        OutlinedTextField(
+            value = prompt,
+            onValueChange = onPromptChange,
+            placeholder = { Text("e.g. 'Chill lo-fi beats for studying', 'High energy workout mix', '90s rock road trip'", color = TextSecondary) },
+            singleLine = false,
+            modifier = Modifier.fillMaxWidth().height(120.dp),
+            shape = RoundedCornerShape(16.dp),
+            colors = OutlinedTextFieldDefaults.colors(
+                focusedContainerColor = VoidSlateCard,
+                unfocusedContainerColor = VoidSlateCard,
+                focusedBorderColor = ElectricCyan,
+                unfocusedBorderColor = Color.Transparent,
+                focusedTextColor = TextPrimary,
+                unfocusedTextColor = TextPrimary
+            )
+        )
+
+        FilledButton(
+            onClick = onGenerate,
+            enabled = prompt.isNotBlank() && !isGenerating,
+            colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black),
+            modifier = Modifier.fillMaxWidth().height(56.dp)
+        ) {
+            if (isGenerating) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    CircularProgressIndicator(color = Color.Black, modifier = Modifier.size(20.dp))
+                    Text("Generating...", style = TextStyle(fontWeight = FontWeight.Bold, color = Color.Black))
+                }
+            } else {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                    Icon(Icons.Filled.AutoAwesome, contentDescription = null, modifier = Modifier.size(24.dp))
+                    Text("Generate Playlist", style = TextStyle(fontWeight = FontWeight.Bold))
+                }
+            }
+        }
+
+        if (error != null) {
+            Text("Error: $error", color = Color(0xFFFF5252), style = MaterialTheme.typography.bodyMedium)
+        }
+
+        if (generatedPlaylist != null) {
+            Spacer(Modifier.height(24.dp))
+            Text("Generated Playlist", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricCyan))
+            Card(
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                shape = RoundedCornerShape(16.dp),
+                modifier = Modifier.fillMaxWidth()
+            ) {
+                Column(modifier = Modifier.padding(16.dp)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Filled.PlaylistPlay, contentDescription = null, tint = ElectricCyan, modifier = Modifier.size(48.dp))
+                        Column(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
+                            Text(generatedPlaylist!!.title, style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                            Text("${generatedPlaylist!!.songCount} songs", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                        }
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        FilledButton(onClick = { /* play */ }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black)) {
+                            Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                            Spacer(Modifier.width(8.dp))
+                            Text("Play")
+                        }
+                        OutlinedButton(onClick = { /* save */ }) {
+                            Text("Save", color = ElectricCyan)
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GenerateFromSeed(
+    type: String,
+    innerTube: InnerTubeClient,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope
+) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Generate from $type", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+        Text("Select a $type to generate a playlist based on it", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+
+        // In real implementation, would show search for song/artist
+        Text("$type picker coming soon", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary), modifier = Modifier.align(Alignment.CenterHorizontally).padding(top = 48.dp))
+    }
+}
+
+@Composable
+fun GenerateFromMood(
+    innerTube: InnerTubeClient,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope
+) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Generate from Mood", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+        Text("Select a mood to generate a playlist", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+
+        val moods = listOf(
+            "Chill" to Icons.Filled.Spa,
+            "Workout" to Icons.Filled.FitnessCenter,
+            "Focus" to Icons.Filled.Psychology,
+            "Party" to Icons.Filled.Celebration,
+            "Sleep" to Icons.Filled.Bedtime,
+            "Road Trip" to Icons.Filled.DirectionsCar,
+            "Romance" to Icons.Filled.Favorite,
+            "Nostalgia" to Icons.Filled.History,
+        )
+
+        LazyVerticalGrid(
+            columns = GridCells.Adaptive(minSize = 160.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            items(moods) { (mood, icon) ->
+                Card(
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+                    shape = RoundedCornerShape(16.dp),
+                    modifier = Modifier
+                        .widthIn(min = 160.dp, max = 200.dp)
+                        .clickable { /* generate playlist */ }
+                ) {
+                    Column(modifier = Modifier.padding(16.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .aspectRatio(1f)
+                                .clip(RoundedCornerShape(12.dp))
+                                .background(
+                                    Brush.linearGradient(listOf(ElectricCyan.copy(alpha = 0.6f), MaterialTheme.colorScheme.surfaceContainerHigh))
+                                ),
+                                contentAlignment = Alignment.Center
+                        ) {
+                            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(48.dp))
+                        }
+                        Spacer(Modifier.height(12.dp))
+                        Text(mood, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun GenerateRandom(
+    innerTube: InnerTubeClient,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope
+) {
+    Column(Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+        Text("Random Mix", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+        Text("Generate a completely random playlist", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+
+        FilledButton(onClick = { /* generate random */ }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black), modifier = Modifier.fillMaxWidth().height(56.dp)) {
+            Icon(Icons.Filled.Shuffle, contentDescription = null, modifier = Modifier.size(24.dp))
+            Spacer(Modifier.width(8.dp))
+            Text("Generate Random Mix", style = TextStyle(fontWeight = FontWeight.Bold))
+        }
+    }
+}
+
+
+

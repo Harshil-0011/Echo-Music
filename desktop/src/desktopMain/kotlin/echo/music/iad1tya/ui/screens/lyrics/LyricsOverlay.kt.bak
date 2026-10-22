@@ -1,0 +1,326 @@
+package echo.music.iad1tya.ui.screens.lyrics
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.*
+import echo.music.iad1tya.desktop.lyrics.DesktopLyricsProvider
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun LyricsOverlay(
+    track: SongModel?,
+    positionMs: Long,
+    durationMs: Long,
+    onDismiss: () -> Unit,
+    lyricsProvider: DesktopLyricsProvider,
+    onSeekTo: (Long) -> Unit,
+    onToggleTranslation: () -> Unit
+) {
+    var lyrics by remember { mutableStateOf<LyricsData?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    var showTranslation by remember { mutableStateOf(false) }
+
+    val scope = rememberCoroutineScope()
+
+    if (track != null && lyrics == null && !isLoading) {
+        isLoading = true
+        LaunchedEffect(track.id) {
+            try {
+                val data = lyricsProvider.fetchLyrics(track.id, track.title, track.artist)
+                lyrics = data
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    val lyricsData = lyrics
+
+    Surface(
+        color = MaterialTheme.colorScheme.background.copy(alpha = 0.97f),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Column(modifier = Modifier.fillMaxSize().padding(24.dp)) {
+            // Header
+            Surface(
+                color = MaterialTheme.colorScheme.surfaceContainer,
+                modifier = Modifier.fillMaxWidth().height(64.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        "Synchronized Lyrics",
+                        style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = ElectricCyan)
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                        if (lyricsData?.lines.isNotEmpty() == true) {
+                            IconButton(onClick = onToggleTranslation) {
+                                Icon(
+                                    Icons.Filled.Translate,
+                                    contentDescription = "Toggle translation",
+                                    tint = if (showTranslation) ElectricCyan else TextSecondary
+                                )
+                            }
+                        }
+                        IconButton(onClick = onDismiss) {
+                            Icon(Icons.Filled.Close, contentDescription = "Close", tint = TextPrimary)
+                        }
+                    }
+                }
+            }
+
+            // Lyrics Content
+            Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                if (track == null) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Icon(Icons.Filled.MusicOff, contentDescription = null, tint = TextSecondary, modifier = Modifier.size(64.dp))
+                            Text("No track playing", style = MaterialTheme.typography.titleLarge.copy(color = TextPrimary))
+                        }
+                    }
+                } else if (isLoading) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            CircularProgressIndicator()
+                            Text("Loading lyrics...", style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                        }
+                    }
+                } else if (lyricsData == null || lyricsData.lines.isEmpty()) {
+                    Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                            Text(
+                                track?.title ?: "No track playing",
+                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                            )
+                            Text(
+                                track?.artist ?: "",
+                                style = MaterialTheme.typography.titleMedium.copy(color = TextSecondary)
+                            )
+                            Spacer(Modifier.height(24.dp))
+                            Text(
+                                "♪ No lyrics available ♪",
+                                style = MaterialTheme.typography.bodyLarge.copy(color = ElectricCyan)
+                            )
+                            Text(
+                                "Position: ${formatTime(positionMs)}",
+                                style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                            )
+                        }
+                    }
+                } else {
+                    // Lyrics lines
+                    val activeIndex = lyricsData.lines.indexOfFirst { it.startMs <= positionMs && positionMs < it.endMs }
+
+                    LazyColumn(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(top = 16.dp, bottom = 100.dp),
+                        verticalArrangement = Arrangement.spacedBy(4.dp),
+                        contentPadding = PaddingValues(horizontal = 16.dp)
+                    ) {
+                        items(lyricsData.lines.size) { index ->
+                            val line = lyricsData.lines[index]
+                            val isActive = activeIndex >= 0 && index == activeIndex
+                            val text = if (showTranslation && line.translation != null) line.translation!! else line.text
+
+                            LyricsLineItem(
+                                text = text,
+                                isActive = isActive,
+                                timestamp = line.startMs,
+                                onClick = { onSeekTo(line.startMs) }
+                            )
+                        }
+
+                        // Scroll to active line
+                        if (activeIndex >= 0) {
+                            // In real implementation, would animate scroll to active line
+                        }
+                    }
+
+                    // Time display
+                    Spacer(Modifier.height(16.dp))
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Text(
+                            "${formatTime(positionMs)} / ${formatTime(durationMs)}",
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                        )
+                        if (lyricsData.synced) {
+                            Text(
+                                "SYNCED",
+                                style = MaterialTheme.typography.labelSmall.copy(color = ElectricCyan, fontWeight = FontWeight.Bold)
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun LyricsLineItem(
+    text: String,
+    isActive: Boolean,
+    timestamp: Long,
+    onClick: () -> Unit
+) {
+    Surface(
+        color = if (isActive) ElectricCyan.copy(alpha = 0.15f) else Color.Transparent,
+        shape = RoundedCornerShape(8.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(vertical = 4.dp)
+            .clickable { onClick() }
+    ) {
+        Text(
+            text = text,
+            style = MaterialTheme.typography.bodyLarge.copy(
+                color = if (isActive) ElectricCyan else TextPrimary,
+                fontWeight = if (isActive) FontWeight.Bold else FontWeight.Normal
+            ),
+            modifier = Modifier.fillMaxWidth().padding(horizontal = 24.dp, vertical = 12.dp)
+        )
+    }
+}
+
+// Floating Lyrics Window (for mini player expansion)
+@Composable
+fun FloatingLyricsWindow(
+    track: SongModel?,
+    positionMs: Long,
+    durationMs: Long,
+    onDismiss: () -> Unit,
+    lyricsProvider: DesktopLyricsProvider,
+    onSeekTo: (Long) -> Unit
+) {
+    var lyrics by remember { mutableStateOf<LyricsData?>(null) }
+    var isLoading by remember { mutableStateOf(false) }
+    var isExpanded by remember { mutableStateOf(false) }
+
+    if (track != null && lyrics == null && !isLoading) {
+        isLoading = true
+        LaunchedEffect(track.id) {
+            try {
+                val data = lyricsProvider.fetchLyrics(track.id, track.title, track.artist)
+                lyrics = data
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                isLoading = false
+            }
+        }
+    }
+
+    val lyricsData = lyrics
+
+    AnimatedVisibility(
+        visible = track != null,
+        enter = fadeIn(tween(200)) + slideInVertically(tween(300)) { it / 4 },
+        exit = fadeOut(tween(200)) + slideOutVertically(tween(200)) { it / 4 }
+    ) {
+        Surface(
+            color = MaterialTheme.colorScheme.background.copy(alpha = 0.98f),
+            shape = RoundedCornerShape(topStart = 24.dp, topEnd = 24.dp),
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(if (isExpanded) 400.dp else 120.dp)
+        ) {
+            Column(Modifier.fillMaxSize().padding(16.dp)) {
+                // Handle bar
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .fillMaxHeight(if (isExpanded) 0.dp else 120.dp)
+                        .clickable { isExpanded = !isExpanded },
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(40.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.surfaceContainerHigh),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Text(
+                            track?.title?.take(1)?.uppercase() ?: "♪",
+                            color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold
+                        )
+                    }
+                    Column(modifier = Modifier.padding(start = 12.dp).weight(1f)) {
+                        Text(
+                            track?.title ?: "No track",
+                            style = MaterialTheme.typography.bodyLarge.copy(fontWeight = FontWeight.Bold, color = TextPrimary),
+                            maxLines = 1, overflow = TextOverflow.Ellipsis
+                        )
+                        Text(
+                            track?.artist ?: "",
+                            style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary)
+                        )
+                    }
+                    Icon(
+                        Icons.Filled.ExpandMore,
+                        contentDescription = "Expand lyrics",
+                        tint = TextSecondary,
+                        modifier = Modifier.padding(end = 16.dp)
+                    )
+                }
+
+                if (isExpanded) {
+                    LyricsOverlay(
+                        track = track,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        onDismiss = { isExpanded = false },
+                        lyricsProvider = DesktopLyricsProvider(),
+                        onSeekTo = onSeekTo,
+                        onToggleTranslation = { }
+                    )
+                }
+            }
+        }
+    }
+}
+
+
+
+

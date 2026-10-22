@@ -1,0 +1,317 @@
+﻿package echo.music.iad1tya.ui.screens.recognition
+
+import androidx.compose.animation.core.InfiniteTransition
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.ImageBitmap
+import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import echo.music.iad1tya.desktop.models.SongModel
+import echo.music.iad1tya.ui.*
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun RecognitionScreen(
+    onBackClick: () -> Unit = {}
+) {
+    var isListening by remember { mutableStateOf(false) }
+    var progress by remember { mutableStateOf(0f) }
+    var recognizedSong by remember { mutableStateOf<SongModel?>(null) }
+    var error by remember { mutableStateOf<String?>(null) }
+    var history by remember { mutableStateOf(listOf<SongModel>()) }
+
+    val scope = rememberCoroutineScope()
+
+    val pulsateAnimation = rememberInfiniteTransition(label = "")
+    val scale by pulsateAnimation.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.1f,
+        animationSpec = infiniteRepeatable(
+            animation = tween(800, easing = androidx.compose.animation.core.LinearEasing),
+            repeatMode = RepeatMode.Reverse
+        ),
+        label = "pulsate"
+    )
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        Box(Modifier.fillMaxSize()) {
+            Column(
+                modifier = Modifier.fillMaxSize(),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                // Top Bar
+                Surface(
+                    color = VoidSlateSurface,
+                    modifier = Modifier.fillMaxWidth().height(64.dp)
+                ) {
+                    Row(
+                        modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.SpaceBetween
+                    ) {
+                        IconButton(onClick = { onBackClick() }) {
+                            Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+                        }
+                        Text(
+                            "Echo Find",
+                            style = MaterialTheme.typography.titleLarge.copy(
+                                fontWeight = FontWeight.Bold,
+                                fontSize = 22.sp,
+                                color = ElectricCyan
+                            )
+                        )
+                        IconButton(onClick = { /* settings */ }) {
+                            Icon(Icons.Filled.Settings, contentDescription = "Settings", tint = TextSecondary)
+                        }
+                    }
+                }
+
+            // Main Recognition Area
+            Column(
+                modifier = Modifier.weight(1f),
+                verticalArrangement = Arrangement.Center,
+                horizontalAlignment = Alignment.CenterHorizontally
+            ) {
+                if (isListening) {
+                    // Listening animation
+                    Box(
+                        modifier = Modifier
+                            .size(200.dp)
+                            .graphicsLayer {
+                                scaleX = scale
+                                scaleY = scale
+                            }
+                    ) {
+                        Box(
+                            modifier = Modifier
+                                .size(160.dp)
+                                .clip(CircleShape)
+                                .background(ElectricCyan.copy(alpha = 0.1f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(120.dp)
+                                .clip(CircleShape)
+                                .background(ElectricCyan.copy(alpha = 0.2f))
+                        )
+                        Box(
+                            modifier = Modifier
+                                .size(80.dp)
+                                .clip(CircleShape)
+                                .background(ElectricCyan)
+                        ) {
+                            Icon(Icons.Filled.Mic, contentDescription = "Listening", tint = Color.White, modifier = Modifier.size(40.dp))
+                        }
+                    }
+
+                    Spacer(Modifier.height(32.dp))
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            "Listening...",
+                            style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                        )
+                        Text(
+                            "Hold your device near the music",
+                            style = MaterialTheme.typography.bodyLarge.copy(color = TextSecondary)
+                        )
+                    }
+
+                    // Progress ring
+                    Spacer(Modifier.height(32.dp))
+                    CircularProgressIndicator(
+                        modifier = Modifier.size(80.dp),
+                        color = ElectricCyan,
+                        trackColor = VoidSlateCard,
+                        strokeWidth = 8.dp
+                    )
+
+                    Spacer(Modifier.height(24.dp))
+                    Button(onClick = { isListening = false }, colors = ButtonDefaults.buttonColors(containerColor = Color(0xFFFF5252))) {
+                        Text("Stop", color = Color.White)
+                    }
+
+                } else if (recognizedSong != null) {
+                    // Result
+                    val song = recognizedSong!!
+
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Box(
+                            modifier = Modifier
+                                .size(160.dp)
+                                .clip(RoundedCornerShape(16.dp))
+                                .background(
+                                    Brush.linearGradient(listOf(ElectricCyan.copy(alpha = 0.6f), VoidSlateCardHover))
+                                ),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Text(song.title.take(1).uppercase(), color = Color.White, fontSize = 64.sp, fontWeight = FontWeight.Bold)
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(song.title, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                            Text(song.artist, style = MaterialTheme.typography.titleMedium.copy(color = TextSecondary))
+                        }
+
+                        Row(horizontalArrangement = Arrangement.spacedBy(16.dp), verticalAlignment = Alignment.CenterVertically) {
+                            Button(onClick = { /* play */ }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black)) {
+                                Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                                Spacer(Modifier.width(8.dp))
+                                Text("Play")
+                            }
+                            OutlinedButton(onClick = { /* save */ }, colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)) {
+                                Text("Save to Library")
+                            }
+                            OutlinedButton(onClick = { recognizedSong = null }, colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)) {
+                                Text("Search Again")
+                            }
+                        }
+                    }
+
+                } else if (error != null) {
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Icon(Icons.Filled.SentimentDissatisfied, contentDescription = null, tint = Color(0xFFFF5252), modifier = Modifier.size(64.dp))
+                        Text("Couldn't identify", style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                        Text(error!!, style = MaterialTheme.typography.bodyMedium.copy(color = TextSecondary))
+                        Button(onClick = { error = null; isListening = true }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black)) {
+                            Text("Try Again", color = Color.White)
+                        }
+                    }
+
+                } else {
+                    // Initial state
+                    Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                        Box(
+                            modifier = Modifier.size(120.dp).clip(CircleShape).background(VoidSlateCardHover),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Icon(Icons.Filled.Mic, contentDescription = "Start recognition", tint = ElectricCyan, modifier = Modifier.size(60.dp))
+                        }
+
+                        Column(horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                "Echo Find",
+                                style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary)
+                            )
+                            Text(
+                                "Tap to identify music playing around you",
+                                style = MaterialTheme.typography.bodyLarge.copy(color = TextSecondary)
+                            )
+                        }
+
+                        Button(
+                            onClick = {
+                                isListening = true
+                                recognizedSong = null
+                                error = null
+                                progress = 0f
+                                // In real implementation, would start audio recording and recognition
+                                scope.launch {
+                                    // Simulate recognition after 3 seconds
+                                    kotlinx.coroutines.delay(3000)
+                                    recognizedSong = SongModel(
+                                        id = "recognized_${System.currentTimeMillis()}",
+                                        title = "Recognized Song",
+                                        artist = "Unknown Artist",
+                                        durationMs = 210000L,
+                                        artworkUrl = null,
+                                        audioUrl = null
+                                    )
+                                    isListening = false
+                                }
+                            },
+                            colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black),
+                            modifier = Modifier.width(200.dp).height(56.dp)
+                        ) {
+                            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                                Icon(Icons.Filled.Mic, contentDescription = null, modifier = Modifier.size(24.dp))
+                                Text("Start Listening", fontWeight = FontWeight.Bold, color = Color.Black)
+                            }
+                        }
+                    }
+                }
+
+            // History
+            if (history.isNotEmpty()) {
+                Spacer(Modifier.height(32.dp))
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 24.dp),
+                    verticalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    Text("History", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+                    LazyColumn(
+                        modifier = Modifier.fillMaxWidth().height(200.dp),
+                        verticalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(history) { song ->
+                            Row(
+                                modifier = Modifier.fillMaxWidth().padding(vertical = 8.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                Box(
+                                    modifier = Modifier.size(48.dp).clip(RoundedCornerShape(8.dp)),
+                                    contentAlignment = Alignment.Center
+                                ) {
+                                    Text(song.title.take(1).uppercase(), color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.Bold)
+                                }
+                                Column(modifier = Modifier.padding(start = 16.dp).weight(1f)) {
+                                    Text(song.title, style = MaterialTheme.typography.bodyMedium.copy(color = TextPrimary))
+                                    Text(song.artist, style = MaterialTheme.typography.bodySmall.copy(color = TextSecondary))
+                                }
+                                IconButton(onClick = { /* replay */ }) {
+                                    Icon(Icons.Filled.PlayArrow, contentDescription = "Play", tint = TextSecondary)
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(32.dp))
+        }
+    }
+}
+    }
+}

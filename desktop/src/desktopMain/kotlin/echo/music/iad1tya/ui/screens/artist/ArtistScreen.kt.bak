@@ -1,0 +1,399 @@
+package echo.music.iad1tya.ui.screens.artist
+
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
+import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.*
+import androidx.compose.material3.*
+import androidx.compose.runtime.*
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.key.*
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
+import echo.music.iad1tya.desktop.models.*
+import echo.music.iad1tya.desktop.db.MusicDatabase
+import echo.music.iad1tya.desktop.network.InnerTubeClient
+import echo.music.iad1tya.desktop.playback.DesktopPlaybackEngine
+import echo.music.iad1tya.platform.LocalPreferences
+import echo.music.iad1tya.platform.SystemUtils
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import java.io.File
+import echo.music.iad1tya.ui.*
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun ArtistScreen(
+    artist: ArtistModel,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    innerTube: InnerTubeClient,
+    scope: CoroutineScope,
+    onBackClick: () -> Unit = {}
+) {
+    val songs by remember { mutableStateOf(listOf<SongModel>()) }
+    val albums by remember { mutableStateOf(listOf<AlbumModel>()) }
+    var selectedTab by remember { mutableStateOf(0) }
+    var isLoading by remember { mutableStateOf(true) }
+    var error by remember { mutableStateOf<String?>(null) }
+
+    val tabs = listOf("Songs", "Albums")
+
+    // Load artist data
+    if (songs.isEmpty() && albums.isEmpty() && isLoading) {
+        LaunchedEffect(Unit) {
+            try {
+                // Demo data
+                songs = List(15) { i ->
+                    SongModel(
+                        id = "artist_song_${artist.id}_$i",
+                        title = "Song ${i + 1} - ${artist.name}",
+                        artist = artist.name,
+                        album = "Album ${(i / 3) + 1}",
+                        durationMs = (180000 + (i * 10000)).toLong(),
+                        artworkUrl = artist.artworkUrl,
+                        audioUrl = ""
+                    )
+                }
+                albums = List(5) { i ->
+                    AlbumModel(
+                        id = "artist_album_${artist.id}_$i",
+                        title = "Album ${i + 1}",
+                        artist = artist.name,
+                        artworkUrl = artist.artworkUrl,
+                        songCount = 10 + i,
+                        year = 2020 + i
+                    )
+                }
+                isLoading = false
+            } catch (e: Exception) {
+                error = e.message
+                isLoading = false
+                e.printStackTrace()
+            }
+        }
+    }
+
+    val scope = rememberCoroutineScope()
+    val imageUrl = artist.artworkUrl ?: ""
+    val backgroundImageUrl = imageUrl.replace("=s544", "=s1280")
+
+    Surface(
+        modifier = Modifier
+            .fillMaxSize()
+            .onKeyEvent { event ->
+                if (event.type == KeyEventType.KeyDown && event.key == Key.Escape) {
+                    onBackClick()
+                    true
+                } else false
+            }
+    ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
+            val wide = maxWidth >= 900.dp
+
+            // Top Bar
+            ArtistTopBar(
+                artist = artist,
+                onBackClick = onBackClick,
+                onPlayAll = { scope.launch { playAll() } },
+                onShuffle = { scope.launch { shufflePlay() } },
+                darkMode = MaterialTheme.colorScheme.isDark,
+                pureBlack = MaterialTheme.colorScheme.background == Color.Black
+            )
+
+            // Content
+            Row(Modifier.fillMaxSize()) {
+                if (wide) {
+                    ArtistSidebar(
+                        artist = artist,
+                        onPlayAll = { scope.launch { playAll() } },
+                        onShuffle = { scope.launch { shufflePlay() } },
+                        onSubscribe = { /* TODO */ },
+                        modifier = Modifier.width(400.dp).fillMaxHeight()
+                    )
+                }
+
+                Box(Modifier.weight(1f).fillMaxHeight()) {
+                    Column(Modifier.fillMaxSize()) {
+                        // Tabs
+                        ArtistTabs(
+                            tabs = tabs,
+                            selectedTab = selectedTab,
+                            onTabClick = { selectedTab = it }
+                        )
+
+                        // Content
+                        Box(Modifier.weight(1f).fillMaxHeight().padding(24.dp)) {
+                            if (isLoading) {
+                                CircularProgressIndicator(Modifier.align(Alignment.Center))
+                            } else if (error != null) {
+                                Text("Error: $error", color = Color(0xFFFF5252), style = MaterialTheme.typography.bodyMedium, modifier = Modifier.align(Alignment.Center))
+                            } else {
+                                when (selectedTab) {
+                                    0 -> ArtistSongsContent(
+                                        songs = songs,
+                                        artist = artist,
+                                        playerEngine = playerEngine,
+                                        database = database,
+                                        scope = scope
+                                    )
+                                    1 -> ArtistAlbumsContent(
+                                        albums = albums,
+                                        artist = artist,
+                                        playerEngine = playerEngine,
+                                        database = database,
+                                        scope = scope
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Mini player handled by main app
+            }
+
+            // Bottom player bar handled by main app
+        }
+    }
+
+    fun playAll() {
+        if (songs.isNotEmpty()) {
+            playerEngine.loadAndPlay(songs[0])
+        }
+    }
+
+    fun shufflePlay() {
+        if (songs.isNotEmpty()) {
+            val shuffled = songs.shuffled()
+            playerEngine.loadAndPlay(shuffled[0])
+        }
+    }
+}
+
+@Composable
+fun ArtistTopBar(
+    artist: ArtistModel,
+    onBackClick: () -> Unit,
+    onPlayAll: () -> Unit,
+    onShuffle: () -> Unit,
+    darkMode: Boolean,
+    pureBlack: Boolean
+) {
+    Surface(
+        color = if (pureBlack) Color.Black else VoidSlateSurface,
+        modifier = Modifier.fillMaxWidth().height(64.dp)
+    ) {
+        Row(
+            modifier = Modifier.fillMaxSize().padding(horizontal = 20.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            IconButton(onClick = onBackClick) {
+                Icon(Icons.Filled.ArrowBack, contentDescription = "Back", tint = ElectricCyan)
+            }
+            Text(
+                artist.name,
+                style = MaterialTheme.typography.titleLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 20.sp,
+                    color = TextPrimary
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                IconButton(onClick = { /* shuffle */ }) {
+                    Icon(Icons.Filled.Shuffle, contentDescription = "Shuffle", tint = TextSecondary)
+                }
+                FilledIconButton(onClick = { /* play all */ }, colors = IconButtonDefaults.filledIconButtonColors(containerColor = ElectricCyan, contentColor = Color.Black), modifier = Modifier.size(40.dp)) {
+                    Icon(Icons.Filled.PlayArrow, contentDescription = "Play All")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ArtistSidebar(
+    artist: ArtistModel,
+    onPlayAll: () -> Unit,
+    onShuffle: () -> Unit,
+    onSubscribe: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(color = VoidSlateSurface, modifier = modifier) {
+        Column(modifier = Modifier.fillMaxSize().padding(24.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(CircleShape)
+            ) {
+                ArtworkImage(url = artist.artworkUrl, contentDescription = artist.name)
+            }
+
+            Column(horizontalAlignment = Alignment.Start, verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Text(artist.name, style = MaterialTheme.typography.headlineMedium.copy(fontWeight = FontWeight.Bold, color = TextPrimary), maxLines = 2, overflow = TextOverflow.Ellipsis)
+                Text("${artist.songCount} songs • ${artist.subscriberCount} subscribers", style = MaterialTheme.typography.titleMedium.copy(color = TextSecondary))
+
+                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+                    FilledButton(onClick = { /* play all */ }, colors = ButtonDefaults.buttonColors(containerColor = ElectricCyan, contentColor = Color.Black)) {
+                        Icon(Icons.Filled.PlayArrow, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Play")
+                    }
+                    OutlinedButton(onClick = { /* shuffle */ }, colors = ButtonDefaults.outlinedButtonColors(contentColor = ElectricCyan)) {
+                        Icon(Icons.Filled.Shuffle, contentDescription = null, modifier = Modifier.size(20.dp))
+                        Spacer(Modifier.width(8.dp))
+                        Text("Shuffle")
+                    }
+                }
+
+                OutlinedButton(onClick = { /* subscribe */ }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.PersonAdd, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Subscribe")
+                }
+            }
+
+            Spacer(Modifier.weight(1f))
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                OutlinedButton(onClick = { /* share */ }, modifier = Modifier.fillMaxWidth()) {
+                    Icon(Icons.Filled.Share, contentDescription = null, modifier = Modifier.size(20.dp))
+                    Spacer(Modifier.width(8.dp))
+                    Text("Share")
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ArtistTabs(
+    tabs: List<String>,
+    selectedTab: Int,
+    onTabClick: (Int) -> Unit
+) {
+    TabRow(
+        selectedTabIndex = selectedTab,
+        containerColor = MaterialTheme.colorScheme.surfaceContainer,
+        contentColor = ElectricCyan,
+        indicator = { tabPositions ->
+            TabRowDefaults.Indicator(
+                Modifier
+                    .offset(x = tabPositions[selectedTab].left)
+                    .width(tabPositions[selectedTab].width)
+                    .height(3.dp)
+                    .background(ElectricCyan)
+            )
+        }
+    ) {
+        tabs.forEach { tab ->
+            Tab(selected = selectedTab == tabs.indexOf(tab), onClick = { selectedTab = tabs.indexOf(tab) }, text = { Text(tab) })
+        }
+    }
+}
+
+@Composable
+fun ArtistSongsContent(
+    songs: List<SongModel>,
+    artist: ArtistModel,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope
+) {
+    Text("Songs", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+    LazyColumn(verticalArrangement = Arrangement.spacedBy(0.dp)) {
+        items(songs.size) { index ->
+            val track = songs[index]
+            AlbumTrackRow(
+                track = track,
+                index = index + 1,
+                isPlaying = false,
+                onClick = { scope.launch { playerEngine.loadAndPlay(track) } },
+                onMoreClick = { /* show menu */ }
+            )
+        }
+    }
+}
+
+@Composable
+fun ArtistAlbumsContent(
+    albums: List<AlbumModel>,
+    artist: ArtistModel,
+    playerEngine: DesktopPlaybackEngine,
+    database: MusicDatabase,
+    scope: CoroutineScope
+) {
+    Text("Albums", style = MaterialTheme.typography.headlineSmall.copy(fontWeight = FontWeight.Bold, color = TextPrimary))
+    LazyVerticalGrid(
+        columns = GridCells.Adaptive(minSize = 180.dp),
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        items(albums) { album ->
+            AlbumGridCard(
+                album = album,
+                onClick = { /* navigate to album */ }
+            )
+        }
+    }
+}
+
+@Composable
+fun AlbumGridCard(
+    album: AlbumModel,
+    onClick: () -> Unit
+) {
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceContainerHigh),
+        shape = RoundedCornerShape(16.dp),
+        modifier = Modifier
+            .widthIn(min = 180.dp, max = 220.dp)
+            .clickable { onClick() }
+    ) {
+        Column(modifier = Modifier.padding(16.dp)) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(1f)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(
+                        Brush.linearGradient(listOf(ElectricCyan.copy(alpha = 0.6f), MaterialTheme.colorScheme.surfaceContainerHigh))
+                    ),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(album.title.take(1).uppercase(), color = Color.White, fontSize = 48.sp, fontWeight = FontWeight.Bold)
+            }
+            Spacer(Modifier.height(12.dp))
+            Text(album.title, fontWeight = FontWeight.Bold, color = TextPrimary, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text(album.artist, color = TextSecondary, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+            Text("${album.songCount} songs", style = MaterialTheme.typography.labelSmall.copy(color = TextSecondary))
+        }
+    }
+}
+
+// Reuse AlbumTrackRow from AlbumScreen.kt
+
+
